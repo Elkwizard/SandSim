@@ -1,0 +1,1492 @@
+<script src="https://elkwizard.github.io/Hengine/Hengine.js">
+	title = "Sandulation";
+
+	const RTX = true;
+
+	const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
+		const godRays = new GPUShader(image.width / PIXEL_SIZE, image.height / PIXEL_SIZE, `
+			uniform int lightDistance;
+			uniform vec4 ambientLighting;
+			uniform vec4 lightColor;
+			uniform vec2 lightPosition;
+			uniform float lightIntensity;
+			uniform float localAttenuation;
+			uniform float globalAttenuation;
+			uniform float solidLightCutoff;
+			uniform bool clouds;
+			uniform float time;
+
+			uniform sampler2D image;
+
+			highp float random11(highp float seed) {
+				highp float a = mod(seed * 6.12849, 8.7890975);
+				highp float b = mod(a * 256745.4758903, 232.567890);
+				return mod(abs(a * b), 1.0);
+			}
+
+			highp float random21(highp vec2 seed) {
+				return random11(seed.x + 3.238975 * seed.y + 5.237 * seed.x);
+			}
+
+			highp vec2 smoothT(highp vec2 t) {
+				return t * t * (-2.0 * t + 3.0);
+			} 
+
+			highp float perlin(highp vec2 seed) {
+				highp vec2 samplePoint = floor(seed);
+				highp float a = random21(samplePoint);
+				highp float b = random21(samplePoint + vec2(1.0, 0.0));
+				highp float c = random21(samplePoint + vec2(0.0, 1.0));
+				highp float d = random21(samplePoint + vec2(1.0));
+				highp vec2 t = smoothT(mod(seed, 1.0));
+				return mix(mix(a, b, t.x), mix(c, d, t.x), t.y);
+			}
+			highp float octavePerlin(highp vec2 seed) {
+				seed += 10.0;
+				highp float sum = 0.0;
+				highp float scale = 0.0;
+				for (highp float o = 0.0; o < 20.0; o++) {
+					highp float i = o + 1.0;
+					sum += perlin(seed * i) / i;
+					scale += 1.0 / i;
+				}
+				return sum / scale;
+			}
+
+			float getClouds(vec2 pos) {
+				float oc = clamp(octavePerlin(pos * vec2(14.0, 12.0)) - 0.1, 0.0, 1.0);
+				float pr = perlin(vec2(pos.x, 0.0) * 0.01);
+				float yCutoff = mix(0.5, 0.7, pr);
+				float cutoffFactor = smoothstep(yCutoff + 0.3, yCutoff - 0.1, pos.y);
+				float t = clamp(pow(oc * 2.0, 3.5) * cutoffFactor, 0.0, 1.0);
+				return mix(0.0, oc, t);
+			}
+
+			vec4 getPixel(vec2 uv) {
+				vec2 imageRes = vec2(textureSize(image, 0));
+				return texelFetch(image, ivec2(uv * imageRes), 0);
+			}
+
+			bool light(vec2 uv) {
+				vec4 color = getPixel(uv);
+				return color.a == 0.0;
+			}
+
+			float getFactor(float distance, float attn) {
+				return clamp(1.0 / pow(distance * attn + 1.0, 2.0) - 0.05, 0.0, 1.0);
+			}
+
+			vec4 getDirectionalLight(vec2 uv) {
+				if (light(uv)) return vec4(1.0);
+
+				float distance = 100000.0;
+
+				vec2 lightDirection = normalize(position - lightPosition);
+
+				for (int i = 0; i < lightDistance; i++) {
+					float fi = float(i);
+					vec2 guv = uv - lightDirection * fi / resolution;
+					if (light(guv)) {
+						distance = (fi + 2.0) * float(${DISTANCE_SCALE});
+						break;
+					}
+				}
+
+				float globalDistance = max(0.0, length(position - lightPosition) - solidLightCutoff);
+				float globalFalloff = getFactor(globalDistance, globalAttenuation);
+				float localFalloff = getFactor(distance, localAttenuation);
+
+				return lightColor * lightIntensity * globalFalloff * localFalloff;
+			}
+
+			vec4 shader() {
+				time;
+
+				vec2 uv = position / resolution;
+				vec4 directional = getDirectionalLight(uv);
+				vec4 albedo = getPixel(uv);
+				if (clouds && light(uv)) {
+					float clouds = getClouds(vec2(uv.x + time * 0.0007, uv.y));
+					return vec4(1.0, 1.0, 1.0, clouds);
+				}
+
+				int S = 16; // perfect possible value, 1 / (1 + 16^2) < 1 / 255
+				int T = 1;
+				vec4 glow = vec4(0.0);
+				for (int i = -S; i <= S; i += T)
+				for (int j = -S; j <= S; j += T) {
+					vec2 off = vec2(i, j);
+					vec4 px = getPixel((position + off) / resolution);
+					glow += vec4(px.rgb * px.a, px.a) / (1.0 + dot(off, off));
+				}
+				
+				albedo *= (ambientLighting + directional);
+				return vec4(albedo.rgb + glow.rgb, 1.0);
+			}
+		`);
+
+
+		return function ({
+			direction,
+			position = direction.times(-100000),
+			color = new Color(255, 255, 255),
+			ambient = new Color(20, 20, 20),
+			intensity = 2,
+			attenuation = direction ? 0 : 0.1,
+			solidUntil = 0,
+			clouds = false,
+		}) {
+			godRays.setArguments({
+				image,
+				clouds,
+				time: intervals.frameCount,
+				lightColor: color,
+				ambientLighting: ambient,
+				lightPosition: position.over(DISTANCE_SCALE),
+				lightIntensity: intensity,
+				lightDistance: 200 / DISTANCE_SCALE,
+				globalAttenuation: attenuation,
+				localAttenuation: 0.03,
+				solidLightCutoff: solidUntil / DISTANCE_SCALE
+			});
+
+			return godRays;
+		};
+	};
+
+	const TYPES = Object.fromEntries([
+		"AIR", "MARBLE", "CONDENSED_STONE", "LAVA", "LIGHTNING", "BRICK", "CLAY", "PARTICLE", "BEE", "HIVE", "HONEY", "SUGAR", "SALT", "SALT_WATER", "GRASS", "SOIL", "DAMP_SOIL", "WATER", "ROOT", "KELP_TOP", "COPPER", "PNEUMATOCYST", "SAND", "KELP", "WOOD", "STEAM", "SMOKE", "STONE", "COAL", "WAX", "GRAINY_WAX", "MOLTEN_WAX", "FIRE", "ICE", "HYDROGEN", "FLOWER", "ACID", "POWER_LAVA", "GLASS", "OIL", "FUSE", "BLUE_FIRE", "ELECTRIFIED_ELEMENT", "LIGHT",
+		// "GOLD", "LIQUID_GOLD",
+		// "SILVER", "LIQUID_SILVER",
+		"LIQUID_COPPER",
+	].map((n, i) => [n, i]));
+
+	const CELL = 3;
+
+	class Cell {
+		constructor(id) {
+			this.id = id;
+			this.updated = false;
+			this.vel = new Vector2(0, 0);
+			this.acts = 0;
+		}
+	}
+
+	const grid = Array.dim(width / CELL, height / CELL)
+		.map(() => new Cell(TYPES.AIR));
+
+	const WIDTH = grid.length;
+	const HEIGHT = grid[0].length;
+
+	class Chunk {
+		constructor(x, y) {
+			this.x = x;
+			this.y = y;
+			this.sleep = false;
+			this.sleepNext = true;
+		}
+	}
+
+	const CHUNK = 20;
+	const chunks = Array.dim(WIDTH / CHUNK, HEIGHT / CHUNK)
+		.map((_, x, y) => new Chunk(x, y));
+
+	const CHUNK_WIDTH = chunks.length;
+	const CHUNK_HEIGHT = chunks[0].length;
+
+	const lastIds = Array.dim(WIDTH, HEIGHT)
+		.fill(TYPES.AIR);
+
+	function inBounds(x, y) {
+		return x >= 0 && y >= 0 && x < WIDTH && y < HEIGHT;
+	}
+
+	const NUM_TYPES = Object.entries(TYPES).length;
+
+	let pos = true;
+
+	class Element {
+		static DEFAULT_PASS_THROUGH = new Set([TYPES.AIR]);
+		constructor(alpha, color, flammability = 0, update = () => null, onburn = () => null, drawType = "random", reference = false) {
+			this.color = color;
+			this.drawType = drawType;
+			this.flammability = flammability;
+			this.onburn = onburn;
+
+			if (typeof color === "function") {
+				this.getColor = RTX ? color : (x, y) => Color.alpha(color(x, y), 1);
+			} else {
+				this.multipleColors = Array.isArray(this.color);
+				if (RTX) {
+					alpha /= 255;
+					if (this.multipleColors)
+						this.color = this.color.map(color => Color.alpha(color, alpha));
+					else this.color = Color.alpha(color, alpha);
+				}
+			}
+			this.update = update;
+			this.reference = reference;
+		}
+
+		getColor(x, y) {
+			if (this.multipleColors) return Random.choice(this.color);
+			return this.color;
+		}
+
+		burn(x, y, fireType, burn = false) {
+			if (burn || Random.bool(this.flammability)) {
+				if (!this.onburn(x, y)) {
+					Element.setCell(x, y, fireType);
+				}
+			}
+		}
+
+		static getNeighborsOfType(x, y, id) {
+			return [
+				Element.isType(x, y - 1, id),
+				Element.isType(x + 1, y - 1, id),
+				Element.isType(x + 1, y, id),
+				Element.isType(x + 1, y + 1, id),
+				Element.isType(x, y + 1, id),
+				Element.isType(x - 1, y + 1, id),
+				Element.isType(x - 1, y, id),
+				Element.isType(x - 1, y - 1, id)
+			];
+		}
+
+		static react(x, y, reactant, product, chance = 1) {
+			this.affectAllNeighbors(x, y, (x, y) => {
+				if (Element.isType(x, y, reactant) && Random.bool(chance))
+					Element.setCell(x, y, product);
+			});
+		}
+
+		static consumeReact(x, y, reactant, product, chance = 1) {
+			let reacted = false;
+			this.affectAllNeighbors(x, y, (ox, oy) => {
+				if (!reacted && Element.isType(ox, oy, reactant) && Random.bool(chance)) {
+					Element.setCell(x, y, product);
+					Element.die(ox, oy);
+					reacted = true;
+				}
+			});
+
+		}
+
+		static mixReact(x, y, reactant, product, chance = 1) {
+			let reacted = false;
+			this.affectAllNeighbors(x, y, (ox, oy) => {
+				if (!reacted && Element.isType(ox, oy, reactant) && Random.bool(chance)) {
+					Element.setCell(x, y, product);
+					Element.setCell(ox, oy, product);
+					reacted = true;
+				}
+			});
+
+		}
+
+		static reactMany(x, y, reactant, product, chance = 1) {
+			this.affectAllNeighbors(x, y, (x, y) => {
+				if (Element.isTypes(x, y, reactant) && Random.bool(chance))
+					Element.setCell(x, y, product);
+			});
+		}
+
+		static consumeReactMany(x, y, reactant, product, chance = 1) {
+			let reacted = false;
+			this.affectAllNeighbors(x, y, (ox, oy) => {
+				if (!reacted && Element.isTypes(ox, oy, reactant) && Random.bool(chance)) {
+					Element.setCell(x, y, product);
+					Element.die(ox, oy);
+					reacted = true;
+				}
+			});
+
+		}
+
+		static mixReactMany(x, y, reactant, product, chance = 1) {
+			let reacted = false;
+			this.affectAllNeighbors(x, y, (ox, oy) => {
+				if (!reacted && Element.isTypes(ox, oy, reactant) && Random.bool(chance)) {
+					Element.setCell(x, y, product);
+					Element.setCell(ox, oy, product);
+					reacted = true;
+				}
+			});
+
+		}
+
+		static affectAllNeighbors(x, y, effect) {
+			for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+				const ox = x + i;
+				const oy = y + j;
+				if (inBounds(ox, oy))
+					effect(ox, oy);
+			}
+		}
+
+		static affectNeighbors(x, y, effect) {
+			for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+				const ox = x + i;
+				const oy = y + j;
+				if (inBounds(ox, oy) && grid[ox][oy].id !== TYPES.AIR)
+					effect(ox, oy);
+			}
+		}
+
+		static tryBurn(x, y, type) {
+			const cell = grid[x][y];
+			if (cell.id !== type) {
+				const data = DATA[cell.id];
+				data.burn(x, y, type);
+				if (data.flammability > 0)
+					return true;
+			}
+			return false;
+		}
+
+		static trySetCell(x, y, id, passthrough) {
+			if (this.isEmpty(x, y, passthrough)) {
+				this.setCell(x, y, id);
+				return true;
+			}
+			return false;
+		}
+
+		static setCellId(x, y, id) {
+			grid[x][y].id = id;
+			this.updateCell(x, y);
+		}
+
+		static setCell(x, y, id) {
+			const cell = grid[x][y];
+			cell.id = id;
+			cell.vel.mul(0);
+			cell.acts = 0;
+			this.updateCell(x, y);
+		}
+
+		static sleeping(x, y) {
+			const cx = ~~(x / CHUNK);
+			const cy = ~~(y / CHUNK);
+			return chunks[cx][cy].sleep;
+		}
+
+		static toWake = [];
+
+		static updateCell(x, y) {
+			const S = 1;
+			for (let i = -S; i <= S; i++) for (let j = -S; j <= S; j++) {
+				const X = x + i;
+				const Y = y + j;
+				if (!inBounds(X, Y))
+					continue;
+				const cx = ~~(X / CHUNK);
+				const cy = ~~(Y / CHUNK);
+				const chunk = chunks[cx][cy];
+				if (chunk.sleepNext) {
+					chunk.sleepNext = false;
+					Element.toWake.push(chunk);
+				}
+			}
+		}
+
+		static die(x, y) {
+			this.setCell(x, y, TYPES.AIR);
+		}
+
+		static isEmpty(x, y, set = Element.DEFAULT_PASS_THROUGH) {
+			if (inBounds(x, y)) {
+				let id = grid[x][y].id;
+				if (DATA[id].reference) id = grid[x][y].acts;
+				return set.has(id);
+			}
+			return false;
+		}
+
+		static threeCheck(x, y, element = TYPES.AIR) {
+			return (Element.isType(x, y, element)
+				&& Element.isType(x + 1, y, element)
+				&& Element.isType(x - 1, y, element));
+		}
+
+		// [7] [0] [1]
+		// [6] [ ] [2]
+		// [5] [4] [3]
+		// returns true if all neighbors are "element," returns false otherwise
+		static check(x, y, element = TYPES.AIR, neighbors = [0]) {
+			for (let i = 0; i < neighbors.length; i++) {
+				if (neighbors[i] < 0 || neighbors[i] > 7) throw `"${neighbors[i]}" is not an accepted value for the [neighbors] array (must be between 0 and 7, inclusive)`;
+
+				if (neightbors[i] == 0 && !Element.isType(x, y - 1, element)) return false;
+				else if (neightbors[i] == 1 && !Element.isType(x + 1, y - 1, element)) return false;
+				else if (neightbors[i] == 2 && !Element.isType(x + 1, y, element)) return false;
+				else if (neightbors[i] == 3 && !Element.isType(x + 1, y + 1, element)) return false;
+				else if (neightbors[i] == 4 && !Element.isType(x, y + 1, element)) return false;
+				else if (neightbors[i] == 5 && !Element.isType(x - 1, y + 1, element)) return false;
+				else if (neightbors[i] == 6 && !Element.isType(x - 1, y, element)) return false;
+				else if (neightbors[i] == 7 && !Element.isType(x - 1, y - 1, element)) return false;
+				else throw "ball";
+			}
+
+			return true;
+		}
+
+		static move(x, y, fx, fy) {
+			const t = grid[fx][fy];
+			grid[fx][fy] = grid[x][y];
+			grid[x][y] = t;
+			this.updateCell(x, y);
+			this.updateCell(fx, fy);
+		}
+
+		static isType(x, y, type) {
+			return inBounds(x, y) && grid[x][y].id === type;
+		}
+
+		static isTypes(x, y, types) {
+			return inBounds(x, y) && types.has(grid[x][y].id);
+		}
+
+		static permeate(x, y, permeator, permeatee, soaker, violence = 5) {
+			try {
+				let ox = x;
+				let d = 1;
+
+				while (Element.isType(ox, y + d, permeator)) {
+					d++;
+					let p = Random.perlin(y + d + intervals.frameCount, 0.25, x);
+					ox += Math.round(Number.remap(p, 0, 1, -violence, violence));
+				}
+
+				if (inBounds(ox, y + d) && Element.isType(ox, y + d, permeatee)) {
+					Element.setCell(ox, y + d, permeator);
+					if (Element.isType(x, y - 1, soaker)) Element.die(x, y - 1);
+					else Element.updateCell(x, y);
+				}
+			} catch (e) { alert(e) }
+		}
+
+		static tryMove(x, y, fx, fy, passthrough) {
+			const dx = fx - x;
+			const dy = fy - y;
+			const len = Math.sqrt(dx * dx + dy * dy);
+			let moved = false;
+			let lx = x;
+			let ly = y;
+			for (let i = 1; i <= len; i++) {
+				const t = i / len;
+				const nx = Math.round(x + dx * t);
+				const ny = Math.round(y + dy * t);
+				if (!this.isEmpty(nx, ny, passthrough)) {
+					if (lx !== x || ly !== y) {
+						this.move(x, y, lx, ly);
+						return true;
+					} else return false;
+				}
+				lx = nx;
+				ly = ny;
+			}
+
+			if (this.isEmpty(fx, fy, passthrough)) {
+				this.move(x, y, fx, fy);
+				return true;
+			}
+			return false;
+		}
+	}
+
+	const GRAVITY = 0.5 / CELL;
+	const DISPERSION = 1;
+
+	const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE]);
+	const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, TYPES.STEAM, TYPES.SMOKE, TYPES.HYDROGEN]);
+	const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL]);
+	const SALT_WATER_SWAP_PASSTHROUGH = new Set([TYPES.WATER]);
+	const SOLID_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.WATER, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_SILVER, TYPES.LIQUID_GOLD, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_MAX, TYPES.SALT_WATER]);
+	const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASS_THROUGH, TYPES.AIR, TYPES.PARTICLE]);
+	const CONDUCTIVE = new Set([TYPES.COPPER, TYPES.WATER, TYPES.SALT_WATER]);
+	const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
+	const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
+
+	const fluidUpdate = (x, y, direction, accel, passthrough) => {
+		const { vel } = grid[x][y];
+		vel.y += accel;
+		const dy = direction * (1 + Math.round(vel.y));
+
+		let fell = false;
+		if (Element.tryMove(x, y, x, y + dy, passthrough)) fell = true;
+		else {
+			vel.x += DISPERSION;
+			const d = (1 + Math.round(vel.x)) * (Random.bool() ? -1 : 1);
+			if (Element.tryMove(x, y, x - d, y + dy, passthrough)) fell = true;
+			else if (Element.tryMove(x, y, x + d, y + dy, passthrough)) fell = true;
+			else {
+				// vel.y *= 0.8;
+				if (Element.tryMove(x, y, x - d, y, passthrough));
+				else if (Element.tryMove(x, y, x + d, y, passthrough));
+				else {
+					vel.mul(0);
+				}
+			}
+		}
+
+		// if (fell)
+		// 	vel.x *= 0.8;
+	};
+
+	const fireUpdate = (x, y, type, up = true) => {
+		let neighbors = 0;
+		let burned = 0;
+		let oxygen = 0;
+
+		Element.affectAllNeighbors(x, y, (X, Y) => {
+			if (Element.isEmpty(X, Y))
+				oxygen++;
+			else {
+				const cell = grid[X][Y];
+				if (Element.tryBurn(X, Y, type))
+					burned++;
+				neighbors++;
+			}
+		});
+
+		if ((neighbors < 6 && !burned && Random.bool(0.1)) || !oxygen)
+			Element.die(x, y);
+		else if (Random.bool(0.5)) {
+			if (up) {
+				const d = Random.bool() ? -1 : 1;
+				if (Element.tryMove(x, y, x + d, y - 1));
+				else if (Element.tryMove(x, y, x - d, y - 1));
+			}
+			if (!burned) Element.die(x, y);
+		}
+
+		Element.updateCell(x, y);
+	};
+
+	const lavaUpdate = (x, y, type) => {
+		Element.affectAllNeighbors(x, y, (x, y) => {
+			Element.tryBurn(x, y, type);
+		});
+	};
+
+	const liquidUpdate = (x, y) => {
+		fluidUpdate(x, y, 1, GRAVITY, LIQUID_PASS_THROUGH);
+	};
+
+	const gasUpdate = (x, y) => {
+		fluidUpdate(x, y, -1, 0, GAS_PASS_THROUGH);
+	};
+
+	const solidUpdate = (x, y, theta = Math.PI * 0.5) => {
+		const { vel } = grid[x][y];
+		vel.y += GRAVITY;
+		const dy = 1 + Math.round(vel.y);
+		if (Element.tryMove(x, y, x, y + dy, SOLID_PASS_THROUGH));
+		else {
+			//Math.round(dy * Math.tan(theta * 0.5))
+			const d = Random.bool() ? -1 : 1;
+			if (Element.tryMove(x, y, x - d, y + dy, SOLID_PASS_THROUGH));
+			else if (Element.tryMove(x, y, x + d, y + dy, SOLID_PASS_THROUGH));
+			else vel.y = 0;
+		}
+	};
+
+	function makeCircle(x, y, id, r = 10, chance = 0.2, passthrough = undefined) {
+		let ox = x;
+		let oy = y;
+		for (let i = -r; i <= r; i++) {
+			for (let j = -r; j <= r; j++) {
+				if (i * i + j * j < r * r) {
+					let x = i + ox;
+					let y = j + oy;
+					if (inBounds(x, y) && Element.isEmpty(x, y, passthrough) && Random.bool(chance))
+						Element.setCell(x, y, id);
+				}
+			}
+		}
+	}
+
+	function makeLine(x, y, x1, y1, id, r = 10, chance = 0.2, passthrough = undefined) {
+		const minX = Math.min(x, x1) - r;
+		const minY = Math.min(y, y1) - r;
+		const maxX = Math.max(x, x1) + r;
+		const maxY = Math.max(y, y1) + r;
+		const line = new Line(x, y, x1, y1);
+		for (let i = minX; i <= maxX; i++) for (let j = minY; j <= maxY; j++) {
+			const p = new Vector2(i, j);
+			if (line.distanceTo(p) < r) {
+				if (inBounds(i, j) && Element.isEmpty(i, j, passthrough) && Random.bool(chance))
+					Element.setCell(i, j, id);
+			}
+
+		}
+	}
+
+	const EXPLOSION_PASSTHROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.LIGHTNING, TYPES.AIR, TYPES.PARTICLE]);
+
+	function explode(ox, oy, r = 10, vel = 0.2, passthrough = EXPLOSION_PASSTHROUGH) {
+		for (let i = -r; i <= r; i++) {
+			for (let j = -r; j <= r; j++) {
+				if (i * i + j * j < r * r) {
+					let x = i + ox;
+					let y = j + oy;
+					if (inBounds(x, y) && !Element.isEmpty(x, y, passthrough)) {
+						const cell = grid[x][y];
+						const base = cell.id;
+						Element.setCell(x, y, TYPES.PARTICLE);
+						cell.acts = base;
+						const CHAOS = 10 * vel;
+						cell.vel.set(i * vel + Random.range(-CHAOS, CHAOS), j * vel + Random.range(-CHAOS, CHAOS));
+					}
+				}
+			}
+		}
+	}
+
+	function freqColoring(freqs) {
+		const coloring = [];
+		for (let [color, freq] of freqs) {
+			color = new Color(color);
+			for (let i = 0; i < freq; i++)
+				coloring.push(color);
+		}
+		return coloring;
+	}
+
+
+	const DATA = {
+		[TYPES.AIR]: new Element(0, Color.BLANK),
+		[TYPES.MARBLE]: new Element(1, (x, y) => {
+			const p = Random.octave(5, Random.perlin2D, x, y, 0.1);
+			let color;
+
+			if (p > 0.48 && p < 0.5)
+				color = 0xe8dab3;
+			else {
+				const p2 = Random.octave(5, Random.perlin2D, x, y, 0.1, Random.sampleSeed + 10);
+				if (p2 < 0.5) {
+					if (p2 > 0.49)
+						color = 0xcccccc;
+					else if (p2 > 0.4)
+						color = 0xdddddd;
+					else if (p2 > 0.45)
+						color = 0xeeeeee;
+					else
+						color = 0xffffff;
+				} else
+					color = 0xffffff;
+			}
+
+			return Color.alpha(new Color(color), Color.EPSILON);
+		}),
+		[TYPES.BAD]: new Element(1, Color.WHITE, 0, (x, y) => {
+			Element.tryMove(x, y, x, y + 1);
+		}),
+
+		[TYPES.INV_BAD]: new Element(1, Color.RED, 0, (x, y) => {
+			Element.tryMove(x, y, x, y - 1);
+		}),
+
+		[TYPES.STONE]: new Element(1, [Color.GRAY, Color.colorScale(Color.GRAY, 0.95)]),
+
+		[TYPES.CONDENSED_STONE]: new Element(1, freqColoring([
+			["#3d3c42", 50],
+			["#353438", 50],
+			["#29282c", 1]
+		])),
+
+		[TYPES.GLASS]: new Element(.1, [new Color("#7e8d94"), new Color("#838f91")]),
+
+		[TYPES.SAND]: new Element(1, freqColoring([
+			["#d6c692", 45],
+			["#decd97", 45],
+			["#e0dab9", 1]
+		]), 0.01, (x, y) => {
+			solidUpdate(x, y);
+			//place check
+			if (
+				Element.isType(x, y - 1, TYPES.WATER) &&
+				!Element.isType(x, y + 1, TYPES.WATER) &&
+				!Element.isType(x - 1, y + 1, TYPES.WATER) &&
+				!Element.isType(x + 1, y + 1, TYPES.WATER)
+			) {
+				if (Random.bool(.00001)) {
+					//kelp check
+					const arr = Element.getNeighborsOfType(x, y, TYPES.KELP);
+					const arr2 = Element.getNeighborsOfType(x - 2, y, TYPES.KELP);
+					const arr3 = Element.getNeighborsOfType(x + 2, y, TYPES.KELP);
+
+					if (arr
+						.map((v, i) => !(v || arr2[i] || arr3[i]))
+						.reduce((a, b) => a && b, true)
+					) Element.setCell(x, y - 1, TYPES.KELP);
+				}
+				else Element.updateCell(x, y);
+			}
+		}, (x, y) => {
+			Element.setCell(x, y, TYPES.GLASS);
+			return true;
+		}),
+		[TYPES.SUGAR]: new Element(1, freqColoring([
+			["#785d42", 45],
+			["#8c6e4f", 45],
+			["#ab836f", 1]
+		]), 0, (x, y) => {
+			solidUpdate(x, y);
+		}),
+		[TYPES.SALT]: new Element(1, freqColoring([
+			["#ded7d5", 45],
+			["#e3a594", 45],
+			["#edc1b4", 25],
+			["#cf7f67", 1]
+		]), 0, (x, y) => {
+			solidUpdate(x, y);
+			Element.mixReact(x, y, TYPES.WATER, TYPES.SALT_WATER, 0.1);
+		}),
+		[TYPES.KELP]: new Element(1, [new Color("#2c6c6b")], .02, (x, y) => {
+			//see if it is max height
+			if (grid[x][y].acts < Random.int(90, 150)) {
+
+				//see if it can happen
+				if (Random.bool(.001)) {
+
+					if (Element.threeCheck(x, y - 1, TYPES.WATER) && Element.threeCheck(x, y - 2, TYPES.WATER) && Element.isType(x + 1, y, TYPES.WATER) && Element.isType(x - 1, y, TYPES.WATER) && inBounds(x, y - 1)) {
+						//maybe it'll happen
+
+						//kelp checks
+						if (
+							Element.isType(x + 2, y - 1, TYPES.WATER) &&
+							Element.isType(x - 2, y - 1, TYPES.WATER) &&
+							Element.isType(x + 2, y, TYPES.WATER) &&
+							Element.isType(x - 2, y, TYPES.WATER)
+						) {
+							if (Random.bool(.01)) {
+								Element.setCell(x - 1, y - 1, TYPES.KELP);
+								Element.setCell(x + 1, y - 1, TYPES.KELP);
+								grid[x - 1][y - 1].acts = grid[x][y].acts + 1;
+								grid[x + 1][y - 1].acts = grid[x][y].acts + 1;
+							}
+							else if (Random.bool(.05)) {
+								let off = Random.bool(.5) ? 1 : -1;
+								Element.setCell(x + off, y - 1, TYPES.KELP);
+								grid[x + off][y - 1].acts = grid[x][y].acts + 1
+							}
+							else {
+								Element.setCell(x, y - 1, TYPES.KELP);
+								grid[x][y - 1].acts = grid[x][y].acts + 1;
+							}
+						}
+						else {
+							Element.setCell(x, y - 1, TYPES.KELP);
+							grid[x][y - 1].acts = grid[x][y].acts + 1;
+						}
+					}
+				}
+				else Element.updateCell(x, y);
+			}
+			else if (Random.bool(.3) && Element.threeCheck(x, y - 1, TYPES.WATER)) {
+				Element.setCell(x, y - 1, TYPES.KELP_TOP);
+				grid[x][y - 1].acts = 4;
+			}
+			else Element.updateCell(x, y);
+
+			if (Random.bool(.00001) && Element.isType(x + 1, y, TYPES.WATER) && Element.isType(x + 3, y - 3, TYPES.WATER)) {
+				Element.setCell(x + 1, y, TYPES.KELP_TOP);
+				grid[x + 1][y].acts = 2;
+			}
+			if (Random.bool(.00001) && Element.isType(x - 1, y, TYPES.WATER) && Element.isType(x - 3, y - 3, TYPES.WATER)) {
+				Element.setCell(x - 1, y, TYPES.KELP_TOP);
+				grid[x - 1][y].acts = 3;
+			}
+		}, (x, y) => {
+			Element.trySetCell(x, y - 1, Random.bool(.4) ? TYPES.SMOKE : TYPES.STEAM);
+		}),
+
+		[TYPES.KELP_TOP]: new Element(1, [new Color("#2c6c6b")], .02, (x, y) => {
+			if (grid[x][y].acts == 4) {
+				for (let i = 1; i < 6; i += 2) {
+					if (Element.isType(x + 1, y + i, TYPES.WATER) && Element.isType(x - 1, y + i, TYPES.WATER)) {
+						Element.setCell(x + 1, y + i, TYPES.PNEUMATOCYST);
+						Element.setCell(x - 1, y + i, TYPES.PNEUMATOCYST);
+					}
+				}
+
+				if (inBounds(x - 2, y - 2) && inBounds(x + 2, y - 2)) {
+					Element.setCell(x, y - 1, TYPES.KELP_TOP);
+					grid[x][y - 1].acts = 1;
+					Element.setCell(x, y - 2, TYPES.KELP_TOP);
+					grid[x][y - 2].acts = 1;
+					Element.setCell(x + 1, y - 1, TYPES.KELP_TOP);
+					grid[x + 1][y - 1].acts = 1;
+					Element.setCell(x - 1, y - 1, TYPES.KELP_TOP);
+					grid[x - 1][y - 1].acts = 1;
+					Element.setCell(x - 2, y, TYPES.KELP_TOP);
+					grid[x - 2][y].acts = 1;
+					Element.setCell(x + 2, y, TYPES.KELP_TOP);
+					grid[x + 2][y].acts = 1;
+					Element.setCell(x - 2, y - 2, TYPES.KELP_TOP);
+					grid[x - 2][y - 2].acts = 1;
+					Element.setCell(x + 2, y - 2, TYPES.KELP_TOP);
+					grid[x + 2][y - 2].acts = 1;
+				}
+				grid[x][y].acts = 1;
+			}
+
+			if (grid[x][y].acts == 2) {
+				Element.setCell(x + 1, y - 1, TYPES.KELP_TOP);
+				grid[x + 1][y].acts = 1;
+				Element.setCell(x + 1, y - 2, TYPES.KELP_TOP);
+				grid[x + 1][y].acts = 1;
+			}
+
+			if (grid[x][y].acts == 3) {
+				Element.setCell(x - 1, y - 1, TYPES.KELP_TOP);
+				grid[x + 1][y].acts = 1;
+				Element.setCell(x - 1, y - 2, TYPES.KELP_TOP);
+				grid[x + 1][y].acts = 1;
+			}
+		}, (x, y) => {
+			Element.trySetCell(x, y - 1, Random.bool(.4) ? TYPES.SMOKE : TYPES.STEAM);
+		}),
+
+		[TYPES.PNEUMATOCYST]: new Element(70, [new Color("#bff55b")], .04, (x, y) => {
+
+		}, (x, y) => {
+			Element.trySetCell(x, y - 1, TYPES.HYDROGEN);
+		}),
+
+		[TYPES.COAL]: new Element(1, [new Color("#36454f"), new Color("#2d3b45"), new Color("#2d3b45")], 0.15, solidUpdate, (x, y) => {
+			Element.trySetCell(x, y - 1, TYPES.SMOKE);
+		}),
+		/*
+		[TYPES.LIQUID_GOLD]: new Element(50, [Color.YELLOW, Color.ORANGE], 0, liquidUpdate),
+		[TYPES.GOLD]: new Element(20, [Color.YELLOW, Color.CREAM], 0.05, solidUpdate, (x, y) => {
+			Element.setCell(x, y, TYPES.LIQUID_GOLD);
+			return true;
+		}),
+		[TYPES.LIQUID_SILVER]: new Element(10, [Color.LIGHT_GRAY, Color.YELLOW], 0, liquidUpdate),
+		[TYPES.SILVER]: new Element(5, [Color.LIGHT_GRAY, Color.WHITE], 0.05, solidUpdate, (x, y) => {
+			Element.setCell(x, y, TYPES.LIQUID_SILVER);
+			return true;
+		}),*/
+		[TYPES.LIQUID_COPPER]: new Element(20, [Color.BROWN, Color.ORANGE], 0, liquidUpdate),
+		[TYPES.COPPER]: new Element(10, [Color.lerp(Color.ORANGE, Color.RED, 0.5), Color.RED], 0.05, solidUpdate, (x, y) => {
+			Element.setCell(x, y, TYPES.LIQUID_COPPER);
+			return true;
+		}),
+		[TYPES.OIL]: new Element(1, new Color("#123456"), 0.2, liquidUpdate, (x, y) => {
+			if (Element.isEmpty(x, y - 1))
+				grid[x][y - 1].id = TYPES.SMOKE;
+		}),
+		[TYPES.STEAM]: new Element(0, [Color.alpha(Color.LIGHT_GRAY, 0.8), Color.alpha(Color.LIGHT_GRAY, 0.8), new Color("#88989d")], 0, (x, y) => {
+			gasUpdate(x, y);
+			Element.updateCell(x, y);
+			if (Random.bool(0.0004))
+				Element.setCell(x, y, TYPES.WATER);
+		}),
+
+		[TYPES.ICE]: new Element(1, [new Color("#d7e3f5"), new Color("#cadbe8")], 0.01, (x, y) => {
+
+		}, (x, y) => {
+			Element.setCell(x, y, TYPES.WATER);
+			return true;
+		}),
+
+		[TYPES.WAX]: new Element(1, [new Color("#f3e3c2"), new Color("#f3e3c2"), new Color("#f0e0c0"), new Color("#f5e7cb")], 0.05, (x, y) => {
+
+		}, (x, y) => {
+			Element.setCell(x, y, TYPES.MOLTEN_WAX);
+			return true;
+		}),
+
+		[TYPES.GRAINY_WAX]: new Element(1, [new Color("#f3e3c2"), new Color("#f3e3c2"), new Color("#f7eedc"), new Color("#f5e7cb"), new Color("#f5e7cb")], 0.06, (x, y) => {
+			solidUpdate(x, y);
+			let arr = Element.getNeighborsOfType(x, y, TYPES.GRAINY_WAX);
+			if (arr[0] && arr[2] && arr[4] && arr[6] && Random.bool(.2)) Element.setCell(x, y, TYPES.WAX);
+			if (Random.bool(.0005)) Element.setCell(x, y, TYPES.WAX);
+		}, (x, y) => {
+			Element.setCell(x, y, TYPES.MOLTEN_WAX);
+			return true;
+		}),
+
+		[TYPES.MOLTEN_WAX]: new Element(2, [new Color("#f7eedc"), new Color("#f5e7cb"), new Color("#f5e7cb")], 0, (x, y) => {
+			liquidUpdate(x, y);
+			if (Random.bool(.001)) Element.setCell(x, y, TYPES.GRAINY_WAX);
+			else Element.updateCell(x, y);
+		}),
+
+		[TYPES.SMOKE]: new Element(.5, [Color.DARK_GRAY, new Color("#232326")], 0, (x, y) => {
+			gasUpdate(x, y);
+		}),
+
+		[TYPES.HYDROGEN]: new Element(5, [new Color("#74d6cc")], .5, (x, y) => {
+			gasUpdate(x, y);
+		}, (x, y) => {
+			if (Random.bool(.03)) {
+				Element.setCell(x, y, TYPES.WATER);
+				return true;
+			}
+		}),
+
+		[TYPES.SOIL]: new Element(1, freqColoring([
+			["#926829", 30],
+			["#9b7653", 30],
+			["#555555", 1]
+		]), 0.01, (x, y) => {
+			solidUpdate(x, y);
+			Element.consumeReact(x, y, TYPES.WATER, TYPES.DAMP_SOIL);
+		}),
+
+		[TYPES.ROOT]: new Element(1, [new Color("#bfb19b")], .02, (x, y) => {
+
+		}, (x, y) => {
+			Element.trySetCell(x, y - 1, Random.bool(.7) ? TYPES.SMOKE : TYPES.STEAM);
+		}),
+
+		[TYPES.DAMP_SOIL]: new Element(1, freqColoring([
+			["#34292c", 35],
+			["#4f3f32", 35],
+			["#666666", 1]
+		]), 0.01, (x, y) => {
+			solidUpdate(x, y)
+
+			if (Element.isType(x, y - 1, TYPES.WATER))
+				Element.permeate(x, y, TYPES.DAMP_SOIL, TYPES.SOIL, TYPES.WATER, 2);
+			/*
+		if(Element.isType(x, y - 1, TYPES.WATER)){
+			grid[x][y].acts += 1;
+			Element.die(x, y - 1);
+		}
+		// let th = Random.perlin2D(x, y / 5, 0.2);
+		// th = 0.35 < th && th < 0.75 ? 1.0 : 0.2;
+		//   lastIds[x][y] = TYPES.DAMP_SOIL;
+		//   Element.updateCell(x, y);
+		//  tex.setPixel(x, y, Color.colorScale(new Color(255, 0, 0, 1/255), th));	
+		if (grid[x][y].acts <= 2)
+			return;
+
+		let toTransfer = 0;
+		Element.affectNeighbors(x, y, (xN, yN) => {
+				if(Element.isType(xN, yN, TYPES.SOIL)){
+					Element.setCell(xN, yN, TYPES.DAMP_SOIL);
+					grid[xN][yN].acts = 0;
+				}
+
+				if(Element.isType(xN, yN, TYPES.DAMP_SOIL)){
+					toTransfer++;
+				}
+		});
+
+		toTransfer = Math.min(toTransfer, grid[x][y].acts) / toTransfer;
+
+		Element.affectNeighbors(x, y, (xN, yN) => {
+			if(Element.isType(xN, yN, TYPES.DAMP_SOIL)){
+				Element.updateCell(xN, yN);
+				grid[xN][yN].acts += toTransfer;
+				grid[x][y].acts -= toTransfer;
+			}
+		});
+*/			if (
+				Element.isType(x, y - 1, TYPES.AIR) &&
+				Element.threeCheck(x, y + 1, TYPES.DAMP_SOIL)
+			) {
+				if (Random.bool(.0001))
+					Element.setCell(x, y - 1, TYPES.GRASS);
+				else Element.updateCell(x, y);
+			}
+		}, (x, y) => {
+			Element.setCell(x, y, TYPES.SOIL);
+			if (Math.random() < .4) Element.trySetCell(x, y - 1, TYPES.STEAM);
+			return true;
+		}),
+
+		[TYPES.GRASS]: new Element(1, [new Color("#53f581"), new Color("#33d44e")], .03, (x, y) => {
+			let shift = Random.bool(.9) ? 0 : Math.floor(Math.random() * 3) - 1;
+
+			if (Element.isType(x + shift, y - 1, TYPES.AIR) && inBounds(x + shift, y - 1)) {
+				if (Random.bool(.001)) {
+					Element.setCell(x + shift, y - 1, TYPES.GRASS);
+				}
+				else if (Random.bool(.0003)) {
+					let arr = Element.getNeighborsOfType(x, y - 1, TYPES.AIR);
+					if (inBounds(x, y - 1) && arr[0] && arr[2] && arr[4] && Element.isType(x + 1, y, TYPES.AIR) && Element.isType(x - 1, y, TYPES.AIR)) Element.setCell(x, y - 1, TYPES.FLOWER);
+					else Element.updateCell(x, y);
+				}
+				else Element.updateCell(x, y);
+			}
+			else Element.updateCell(x, y);
+
+			if (Element.isType(x, y - 1, TYPES.WATER)) {
+				//grow 
+				if (Random.bool(.1)) {
+					Element.setCell(x, y - 1, TYPES.GRASS);
+				}
+				else Element.updateCell(x, y);
+
+				//soak water
+				let below = 1;
+				while (Element.isType(x, y + below, TYPES.GRASS) && inBounds(x, y + below)) {
+					below++;
+				}
+				if (Random.bool(.05)) {
+					if (Element.isType(x, y + below, TYPES.AIR)) Element.setCell(x, y + below, TYPES.WATER);
+					else if (Element.isType(x, y + below, TYPES.SOIL)) Element.setCell(x, y + below, TYPES.DAMP_SOIL);
+					else if (Element.isType(x, y + below, TYPES.DAMP_SOIL)) {
+						try {
+							Element.permeate(x, y + below, TYPES.DAMP_SOIL, TYPES.SOIL, TYPES.WATER);
+						} catch (e) { alert(e) }
+					}
+					else Element.updateCell(x, y);
+				}
+				else Element.updateCell(x, y);
+			}
+
+			if (Random.bool(.1) && (Element.isType(x, y + 1, TYPES.DAMP_SOIL) || Element.isType(x, y + 1, TYPES.SOIL))) {
+				//Element.setCell(x, y + 1, TYPES.ROOT);
+			}
+
+		}, (x, y) => {
+			Element.trySetCell(x, y - 1, Random.bool(.6) ? TYPES.SMOKE : TYPES.STEAM);
+		}, "checker"),
+		[TYPES.FLOWER]: new Element(5, [Color.RAZZMATAZZ, Color.RAZZMATAZZ, Color.RAZZMATAZZ, Color.RED, Color.SKY_BLUE, Color.YELLOW, Color.WHITE, Color.ORANGE], .07, (x, y) => {
+			let arr = Element.getNeighborsOfType(x, y, TYPES.GRASS)
+			if (arr[0] || arr[2] || arr[4]) Element.setCell(x, y, TYPES.GRASS);
+			else Element.setCell(x, y, TYPES.FLOWER);
+		}, (x, y) => {
+			if (Element.isEmpty(x, y - 1)) {
+				if (Math.random() < .6) Element.setCell(x, y - 1, TYPES.SMOKE);
+				else Element.setCell(x, y - 1, TYPES.STEAM);
+			}
+		}),
+		[TYPES.WATER]: new Element(0, [new Color("#1202a4"), new Color("#201190")], 0.05, (x, y) => {
+			fluidUpdate(x, y, 1, GRAVITY, WATER_PASS_THROUGH);
+		}, (x, y) => {
+			Element.trySetCell(x, y - 1, TYPES.STEAM);
+			return true;
+		}),
+		[TYPES.SALT_WATER]: new Element(0, freqColoring([
+			["#264039", 30],
+			["#1e3630", 30]
+		]), 0.05, (x, y) => {
+			fluidUpdate(x, y, 1, GRAVITY, WATER_PASS_THROUGH);
+			if (Random.bool(1.0)) {
+				const angle = Random.angle();
+				const cos = Math.cos(angle);
+				const sin = Math.sin(angle);
+				Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin), SALT_WATER_SWAP_PASSTHROUGH);
+			} else {
+				Element.updateCell(x, y);
+			}
+		}, (x, y) => {
+			Element.trySetCell(x, y - 1, TYPES.STEAM);
+			Element.setCell(x, y, TYPES.SALT);
+			return true;
+		}),
+		[TYPES.POWER_LAVA]: new Element(100, [Color.CYAN, Color.BLUE, Color.SKY_BLUE], 0, (x, y) => {
+			liquidUpdate(x, y);
+
+			Element.react(x, y - Math.floor((Math.random() * 6)), TYPES.AIR, TYPES.BLUE_FIRE, 0.007);
+			Element.reactMany(x, y, WATER_TYPES, TYPES.SMOKE, 0.005);
+
+			if (Random.bool(.5)) Element.react(x, y, TYPES.STONE, TYPES.SMOKE);
+			if (Random.bool(.3)) Element.react(x, y, TYPES.GLASS, TYPES.SMOKE);
+
+			lavaUpdate(x, y, TYPES.BLUE_FIRE);
+		}),
+		[TYPES.LAVA]: new Element(100, [new Color("#bf1000"), new Color("#bf2010")], 0, (x, y) => {
+			liquidUpdate(x, y);
+
+			lavaUpdate(x, y, TYPES.FIRE);
+
+			Element.react(x, y - 1, TYPES.AIR, TYPES.FIRE, 0.0005);
+			Element.consumeReactMany(x, y, WATER_TYPES, TYPES.STONE);
+
+			if (Element.isType(x, y - 1, TYPES.LIGHTNING)) {
+				Element.setCell(x, y, TYPES.POWER_LAVA);
+				makeCircle(x, y, TYPES.BLUE_FIRE, 35);
+				explode(x, y, 35);
+			}
+
+			const arr = Element.getNeighborsOfType(x, y, TYPES.POWER_LAVA);
+
+			for (let i = 0; i < 8; i++) {
+				if (arr[i]) {
+					Element.setCell(x, y, TYPES.POWER_LAVA);
+					if (Element.isType(x, y - 1, TYPES.AIR)) {
+						explode(x, y - 1, 10);
+					}
+					break;
+				}
+			}
+
+		}),
+		[TYPES.FUSE]: new Element(1, freqColoring([
+			["#cc2157", 30],
+			["#b82352", 30],
+			["#d13f6d", 1]
+		]), 0.2, (x, y) => null, (x, y) => {
+			Element.trySetCell(x, y - 1, TYPES.SMOKE);
+		}),
+		[TYPES.WOOD]: new Element(1, [new Color("#6A4B35"), new Color("#553C2A"), new Color("#443022")], 0.05, () => null, (x, y) => {
+			Element.trySetCell(x, y - 1, TYPES.SMOKE);
+		}),
+
+		[TYPES.HONEY]: new Element(0, [new Color("#a66c16")], 0.05, (x, y) => {
+			fluidUpdate(x, y, 1, GRAVITY, WATER_PASS_THROUGH);
+		}, (x, y) => {
+			Element.trySetCell(x, y - 1, TYPES.STEAM);
+			Element.setCell(x, y, TYPES.SUGAR);
+			return true;
+		}),
+
+		[TYPES.HIVE]: new Element(1, [new Color("#de9e1d"), new Color("#d9b85d"), new Color("#d9b85d")], 0.02, (x, y) => {
+			if (Random.bool(.00001)) {
+				Element.trySetCell(x, y - 1, TYPES.BEE);
+				Element.trySetCell(x - 1, y, TYPES.BEE);
+				Element.trySetCell(x + 1, y, TYPES.BEE);
+			}
+			else Element.updateCell(x, y);
+
+			if (Random.bool(.001)) Element.trySetCell(x, y + 1, TYPES.HONEY);
+			else Element.updateCell(x, y);
+
+			if (Random.bool(.0000001)
+				&& Element.threeCheck(x, y - 1, TYPES.HIVE)
+				&& Element.threeCheck(x, y + 1, TYPES.HIVE)
+				&& Element.threeCheck(x - 2, y, TYPES.HIVE)
+				&& Element.threeCheck(x + 2, y, TYPES.HIVE)) Element.setCell(x, y, TYPES.GRAINY_WAX);
+			else Element.updateCell(x, y);
+
+		}, (x, y) => {
+			if (Random.bool(.7)) Element.trySetCell(x, y - 1, TYPES.SMOKE);
+			Element.trySetCell(x, y - 1, Random.bool(.3) ? TYPES.MOLTEN_WAX : TYPES.HONEY);
+		}),
+		[TYPES.BEE]: new Element(2, [new Color("#e8d207"), new Color("#ffe812"), new Color("#f5e764"), new Color("#e6d42c"), new Color("#d1a81f"), new Color("#bd940d")], 0.05, (x, y) => {
+			const angle = Random.angle();
+			const cos = Math.cos(angle);
+			const sin = Math.sin(angle);
+			Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin));
+		}, (x, y) => {
+			makeCircle(x, y - 1, TYPES.HONEY, 2);
+			explode(x, y - 1, 2);
+		}),
+		[TYPES.BLUE_FIRE]: new Element(200, [
+			Color.CYAN, Color.BLUE, Color.SKY_BLUE, Color.LIME
+		], 0, (x, y) => fireUpdate(x, y, TYPES.BLUE_FIRE, false)),
+		[TYPES.FIRE]: new Element(120, [
+			Color.ORANGE, Color.RED, Color.YELLOW, Color.BROWN
+		], 0, (x, y) => fireUpdate(x, y, TYPES.FIRE)),
+		[TYPES.ACID]: new Element(40, Color.LIME, 0, (x, y) => {
+			const cell = grid[x][y];
+			Element.affectNeighbors(x, y, (x, y) => {
+				if (!Element.isType(x, y, TYPES.ACID) && !Element.isType(x, y, TYPES.GLASS) && !Element.isType(x, y, TYPES.GLASS) && Random.bool(0.5)) {
+					if (Element.isType(x, y, TYPES.CONDENSED_STONE)) {
+						if (Random.bool(.0004)) {
+							Element.setCell(x, y, TYPES.AIR);
+							cell.acts++;
+						}
+						else Element.updateCell(x, y)
+					}
+					else {
+						Element.setCell(x, y, TYPES.AIR);
+						cell.acts++;
+					}
+				}
+			});
+
+			if (cell.acts > 2)
+				Element.die(x, y);
+			else
+				liquidUpdate(x, y);
+		}),
+		[TYPES.ELECTRIFIED_ELEMENT]: new Element(40, [
+			Color.CREAM
+		], 0, (x, y) => {
+			let base = grid[x][y].acts;
+			neighborLoop: for (let i = -1; i <= 1; i += 2)
+				for (let j = -1; j <= 1; j += 2) {
+					const ox = x + i;
+					const oy = y + j;
+					if (inBounds(ox, oy) && CONDUCTIVE.has(grid[ox][oy].id)) {
+						if (Random.bool(0.25)) {
+							const base = grid[ox][oy].id;
+							Element.setCellId(ox, oy, TYPES.ELECTRIFIED_ELEMENT);
+							grid[ox][oy].acts = base;
+							break neighborLoop;
+						}
+					} else if (inBounds(ox, oy) && grid[ox][oy] !== TYPES.AIR) {
+						const { id } = grid[ox][oy];
+						if (CONDUCTIVE.has(id)) {
+							Element.setCellId(ox, oy, TYPES.ELECTRIFIED_ELEMENT);
+							grid[ox][oy].acts = id;
+						} else DATA[id].burn(ox, oy, TYPES.FIRE);
+					}
+				}
+			// if (!water && 
+			if (Random.bool(0.5)) {
+				Element.setCellId(x, y, base);
+				grid[x][y].acts = 0;
+			} else {
+				Element.updateCell(x, y);
+				DATA[base].update(x, y);
+			}
+		}, () => null, true),
+		[TYPES.PARTICLE]: new Element(1, (x, y) => {
+			return DATA[grid[x][y].acts].getColor(x, y);
+		}, 0, (x, y) => {
+			let base = grid[x][y].acts;
+			const { vel } = grid[x][y];
+			vel.y += GRAVITY;
+
+			if (!Element.tryMove(x, y, x + Math.round(vel.x), y + Math.round(vel.y), PARTICLE_PASSTHROUGH))
+				Element.setCell(x, y, base);
+
+		}, () => null, true),
+		[TYPES.BRICK]: new Element(1, (x, y) => {
+			const W = 10;
+			const H = W >> 1;
+			const ix = Math.floor(x / W);
+			const iy = Math.floor(y / H);
+			x += (iy % 2 ? W >> 1 : 0);
+			const gx = x % W;
+			const gy = y % H;
+
+			if (!gx || !gy) return new Color("#99827601");
+
+			// return new Color(gx / W * 255, gy / H * 255, 0, 1 / 255);
+			// if (;
+			const color = Random.bool() ? new Color("#7d351101") : new Color("#a3452101");
+			return Color.colorScale(
+				color,
+				Number.remap(
+					Random.perlin2D(Math.floor(x / W), Math.floor(y / H)),
+					0, 1, 0.5, 1.3
+				)
+			);
+		}),
+		[TYPES.CLAY]: new Element(1, [new Color("#9c8b79"), new Color("#a8987d")], 0.2, solidUpdate, (x, y) => {
+			Element.setCell(x, y, TYPES.BRICK);
+			return true;
+		}),
+		[TYPES.LIGHTNING]: new Element(80, [new Color(100, 100, 200), Color.WHITE], 0, (x, y) => {
+			const cell = grid[x][y];
+			if (cell.acts === -1) {
+				const ox = x + Random.int(-1, 1);
+				const oy = y + Random.int(-1, 1);
+				if (Random.bool(0.1)) Element.die(x, y);
+				else Element.tryMove(x, y, ox, oy);
+			} else if (cell.acts === 0) {
+				cell.acts++;
+				const dx = Random.bool() ? -1 : 1;
+				const len = Random.int(5, 10);
+				let ox = x;
+				for (let i = 0; i < len; i++) {
+					ox += Random.bool(0.99) ? -dx : dx;
+					const oy = y + i;
+					if (Element.trySetCell(ox, oy, TYPES.LIGHTNING, LIQUID_PASS_THROUGH)) {
+						if (i < len - 1) {
+							grid[ox][oy].acts++;
+
+							if (Random.bool(0.5)) {
+								const ox = x + Random.int(-5, 5);
+								const oy = y + Random.int(-5, 5);
+								if (Element.trySetCell(ox, oy, TYPES.LIGHTNING)) {
+									grid[ox][oy].acts--;
+								}
+
+							}
+						}
+					} else {
+						if (inBounds(ox, oy)) {
+							const { id } = grid[ox][oy];
+							if (id !== TYPES.AIR && id !== TYPES.LIGHTNING) {
+								if (CONDUCTIVE.has(id)) {
+									Element.setCellId(ox, oy, TYPES.ELECTRIFIED_ELEMENT);
+									grid[ox][oy].acts = id;
+								} else {
+									const data = DATA[id];
+									data.burn(ox, oy, TYPES.FIRE, true);
+								}
+								explode(ox, oy, 15);
+							}
+						}
+
+						break;
+					}
+					// else {
+					// 	Element.trySetCell(x - dx * i, y + i, TYPES.LIGHTNING);
+					// 	Element.trySetCell(x + dx * i, y + i, TYPES.LIGHTNING);
+					// }
+				}
+			} else if (cell.acts++ > 10)
+				Element.die(x, y);
+
+			Element.updateCell(x, y);
+		}),
+		[TYPES.LIGHT]: new Element(255, new Color(255, 200, 100), 0.001, () => null, (x, y) => {
+			Element.die(x, y);
+			makeCircle(x, y, TYPES.LIGHTNING, 10);
+			return true;
+		})
+	};
+
+	if (false) {
+		const x0 = (WIDTH >> 1) - (HEIGHT >> 1);
+		const x1 = (WIDTH >> 1) + (HEIGHT >> 1);
+		makeLine(x0, 0, x1, HEIGHT, TYPES.CONDENSED_STONE, 20, 1);
+		makeLine(x0, HEIGHT, x1, 0, TYPES.CONDENSED_STONE, 20, 1);
+		makeLine(x0, 0, x1, HEIGHT, TYPES.BRICK, 15, 1, ALL_PASSTHROUGH);
+		makeLine(x0, HEIGHT, x1, 0, TYPES.BRICK, 15, 1, ALL_PASSTHROUGH);
+		makeCircle(WIDTH >> 1, HEIGHT >> 1, TYPES.CONDENSED_STONE, 105, 1);
+		makeCircle(WIDTH >> 1, HEIGHT >> 1, TYPES.BRICK, 100, 1, ALL_PASSTHROUGH);
+		makeCircle(WIDTH >> 1, HEIGHT >> 1, TYPES.AIR, 70, 1, ALL_PASSTHROUGH);
+		makeCircle((WIDTH >> 1) - 45, (HEIGHT >> 1) + 45, TYPES.LIGHT, 15, 1, ALL_PASSTHROUGH);
+		makeCircle((WIDTH >> 1) + 45, (HEIGHT >> 1) + 45, TYPES.LIGHT, 15, 1, ALL_PASSTHROUGH);
+		makeCircle((WIDTH >> 1), (HEIGHT >> 1) - 62, TYPES.LIGHT, 15, 1, ALL_PASSTHROUGH);
+		// makeCircle((WIDTH >> 1) + 45, (HEIGHT >> 1) - 45, TYPES.LIGHT, 15, 1, ALL_PASSTHROUGH);
+		makeCircle(WIDTH >> 1, HEIGHT >> 1, TYPES.CONDENSED_STONE, 30, 1, ALL_PASSTHROUGH);
+		makeCircle(WIDTH >> 1, HEIGHT >> 1, TYPES.LAVA, 29, 1, ALL_PASSTHROUGH);
+		// makeCircle(WIDTH >> 1, (HEIGHT >> 1) - 15, TYPES.LAVA, 15, 1);
+	}
+
+	let brush = 0;
+	let brushSize = 15;
+	let paused = false;
+
+	const tex = new Texture(WIDTH, HEIGHT);
+
+	const rays = createGodRays(tex, 1, 1);
+
+	function lastBrush() {
+		brush = (brush - 1 + Object.entries(TYPES).length) % Object.entries(TYPES).length;
+	}
+
+	function nextBrush() {
+		brush = (brush + 1) % Object.entries(TYPES).length;
+	}
+
+	intervals.continuous(time => {
+		for (const key of keyboard.downQueue) {
+			if (key === "ArrowRight") nextBrush();
+			else if (key === "ArrowLeft") lastBrush();
+			else if (key === "ArrowUp") brushSize++;
+			else if (key === "ArrowDown") brushSize = Math.max(brushSize - 1, 1);
+		}
+
+		if (keyboard.justPressed("p")) paused = !paused;
+
+		if (mouse.wheelDelta > 0) lastBrush();
+		if (mouse.wheelDelta < 0) nextBrush();
+
+		for (const touch of touches.allPressed) {
+			const r = brushSize;
+			const { x: ox, y: oy } = Vector2.floor(touches.get(touch).screen.over(CELL));
+
+			if (brush === TYPES.PARTICLE)
+				explode(ox, oy, r);
+			else for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
+				if (i * i + j * j < r * r) {
+					const x = i + ox;
+					const y = j + oy;
+					if (inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
+						Element.setCell(x, y, brush);
+				}
+			}
+		}
+
+		const neg_x = !!(time % 2);
+		const neg_y = !!((time >> 1) % 2);
+
+		for (let i = 0; i < WIDTH; i++) for (let j = 0; j < HEIGHT; j++)
+			grid[i][j].updated = false;
+
+		const cells = Array.dim(CHUNK * CHUNK).map((_, i) => i);
+
+		for (let i = 0; i < cells.length; i++) {
+			const inx0 = i;
+			const inx1 = Random.int(0, cells.length - 1);
+			const t = cells[inx0];
+			cells[inx0] = cells[inx1];
+			cells[inx1] = t;
+		}
+
+		function processChunk(chunk) {
+			const cx = chunk.x * CHUNK;
+			const cy = chunk.y * CHUNK;
+
+			for (let i = 0; i < cells.length; i++) {
+				const coord = cells[i];
+				const x = cx + ~~(coord / CHUNK);
+				const y = cy + coord % CHUNK;
+				if (x >= WIDTH || y >= HEIGHT)
+					continue;
+				const cell = grid[x][y];
+				if (!cell.updated) {
+					DATA[cell.id].update(x, y);
+					cell.updated = true;
+				}
+			}
+		}
+
+		if (!paused) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+			const cx = neg_x ? CHUNK_WIDTH - 1 - i : i;
+			const cy = neg_y ? CHUNK_HEIGHT - 1 - j : j;
+			const chunk = chunks[cx][cy];
+			if (chunk.sleep) continue;
+
+			processChunk(chunk);
+
+			while (Element.toWake.length)
+				processChunk(Element.toWake.pop());
+
+		}
+
+
+		for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+			const chunk = chunks[i][j];
+
+			if (chunk.sleep && chunk.sleepNext)
+				continue;
+			const cx = chunk.x * CHUNK;
+			const cy = chunk.y * CHUNK;
+			for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
+				const x = cx + i;
+				const y = cy + j;
+				if (x >= WIDTH || y >= HEIGHT)
+					continue;
+				const cell = grid[x][y];
+				if (cell.id != lastIds[x][y])
+					tex.setPixel(x, y, DATA[cell.id].getColor(x, y));
+			}
+		}
+
+		for (let i = 0; i < WIDTH; i++) for (let j = 0; j < HEIGHT; j++)
+			lastIds[i][j] = grid[i][j].id;
+
+		renderer.fill(Color.BLACK);
+		if (RTX) {
+			const image = rays({
+				direction: new Vector2(-1, 1),
+				color: new Color(105, 105, 50),
+				ambient: new Color(200, 200, 200)
+			});
+			renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
+		} else {
+			renderer.image(tex).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
+		}
+
+		if (!paused) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+			const chunk = chunks[i][j];
+
+			chunk.sleep = chunk.sleepNext;
+			chunk.sleepNext = true;
+			//if (!chunk.sleep)
+			//renderer.stroke(Color.RED).rect(i * CHUNK * CELL, j * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
+		}
+
+
+		renderer.draw(Color.WHITE).text(Font.Arial20, `brush: ${Object.entries(TYPES).find(e => e[1] == brush)[0]}, brushSize: ${brushSize}, paused: ${paused}, fps: ${intervals.fps}`, 10, 10);
+	}, IntervalFunction.AFTER_UPDATE);
+</script>

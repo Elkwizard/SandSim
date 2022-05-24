@@ -110,7 +110,7 @@
 					return vec4(1.0, 1.0, 1.0, clouds);
 				}
 
-				int S = 16; // perfect possible value, 1 / (1 + 16^2) < 1 / 255
+				int S = 6; // perfect possible value, 1 / (1 + 16^2) < 1 / 255
 				int T = 1;
 				vec4 glow = vec4(0.0);
 				for (int i = -S; i <= S; i += T)
@@ -520,13 +520,15 @@
 		const dy = direction * (1 + Math.round(vel.y));
 
 		let fell = false;
+		let horiz = false;
+
 		if (Element.tryMove(x, y, x, y + dy, passthrough)) {
 			fell = true;
 		} else {
 			if (vel.y > 5) {
 				vel.rotate(Random.angle()).div(2);
 				cell.acts = cell.id;
-				cell.id = TYPES.PARTICLE;
+				Element.setCellId(x, y, TYPES.PARTICLE);
 				return;
 			}
 			
@@ -536,9 +538,11 @@
 				const dir = vel.x ? Math.sign(vel.x) : i * b;
 				vel.x += dir * disp;
 				const d = Math.sign(vel.x) * (Math.round(Math.abs(vel.x)) + 1);
-				if (Element.tryMove(x, y, x + d, y + dy, passthrough)) fell = true;
-				else {
-					if (Element.tryMove(x, y, x + d, y, passthrough));
+				if (Element.tryMove(x, y, x + d, y + dy, passthrough)) {
+					fell = true;
+					horiz = true;
+				} else {
+					if (Element.tryMove(x, y, x + d, y, passthrough)) horiz = true;
 					else {
 						vel.mul(0);
 						continue;
@@ -550,7 +554,8 @@
 
 		if (fell) {
 			vel.x *= 0.8;
-		}
+			if (horiz) vel.y *= 0.8;
+		} else vel.y = 0;
 	};
 
 	const fireUpdate = (x, y, type, up = true) => {
@@ -906,7 +911,7 @@
 			Element.setCell(x, y, TYPES.LIQUID_COPPER);
 			return true;
 		}),
-		[TYPES.OIL]: new Element(1, new Color("#123456"), 0.2, liquidUpdate, (x, y) => {
+		[TYPES.OIL]: new Element(1, new Color("#123456"), 0.1, 0.2, liquidUpdate, (x, y) => {
 			if (Element.isEmpty(x, y - 1))
 				grid[x][y - 1].id = TYPES.SMOKE;
 		}),
@@ -1105,9 +1110,8 @@
 				const angle = Random.angle();
 				const cos = Math.cos(angle);
 				const sin = Math.sin(angle);
-				Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin), SALT_WATER_SWAP_PASSTHROUGH);
-			} else {
-				Element.updateCell(x, y);
+				if (!Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin), SALT_WATER_SWAP_PASSTHROUGH));
+					Element.updateCell(x, y);
 			}
 		}, (x, y) => {
 			Element.trySetCell(x, y - 1, TYPES.STEAM);
@@ -1198,7 +1202,8 @@
 			const angle = Random.angle();
 			const cos = Math.cos(angle);
 			const sin = Math.sin(angle);
-			Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin));
+			if (!Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin)))
+				Element.updateCell(x, y);
 		}, (x, y) => {
 			makeCircle(x, y - 1, TYPES.HONEY, 2);
 			explode(x, y - 1, 2);
@@ -1265,9 +1270,9 @@
 			}
 		}, () => null, true),
 		[TYPES.PARTICLE]: new Element(1, (x, y) => {
-			// return new Color("#ff000001");
 			return DATA[grid[x][y].acts].getColor(x, y);
 		}, 0, 0, (x, y) => {
+			try {
 			let base = grid[x][y].acts;
 			const { vel } = grid[x][y];
 			vel.y += GRAVITY;
@@ -1285,7 +1290,12 @@
 				const t = i / len;
 				const nx = Math.round(x + dx * t);
 				const ny = Math.round(y + dy * t);
-				if (!Element.isEmpty(nx, ny, PARTICLE_PASSTHROUGH)) {
+				
+				if (
+					!inBounds(nx, ny) ||
+					grid[nx][ny].id === base ||
+					!PARTICLE_PASSTHROUGH.has(grid[nx][ny].id)
+				) {
 					if (lx !== x || ly !== y) {
 						Element.move(x, y, lx, ly);
 						Element.setCell(lx, ly, base);
@@ -1299,8 +1309,14 @@
 				ly = ny;
 			}
 
-			if (Element.isEmpty(fx, fy, PARTICLE_PASSTHROUGH))
-				Element.move(x, y, fx, fy);
+			if (
+				inBounds(fx, fy) &&
+				grid[fx][fy].id !== base &&
+				PARTICLE_PASSTHROUGH.has(grid[fx][fy].id)
+			) Element.move(x, y, fx, fy);
+		} catch (err) {
+			alert(err.stack);
+		}
 
 		}, () => null, true),
 		[TYPES.BRICK]: new Element(1, (x, y) => {
@@ -1324,12 +1340,12 @@
 					0, 1, 0.5, 1.3
 				)
 			);
-		}, 0.5, 0.4),
+		}, 0.5),
 		[TYPES.CLAY]: new Element(1, [new Color("#9c8b79"), new Color("#a8987d")], 0.3, 0.2, solidUpdate, (x, y) => {
 			Element.setCell(x, y, TYPES.BRICK);
 			return true;
 		}),
-		[TYPES.LIGHTNING]: new Element(80, [new Color(100, 100, 200), Color.WHITE], 0, (x, y) => {
+		[TYPES.LIGHTNING]: new Element(80, [new Color(100, 100, 200), Color.WHITE], 0, 0, (x, y) => {
 			const cell = grid[x][y];
 			if (cell.acts === -1) {
 				const ox = x + Random.int(-1, 1);
@@ -1415,7 +1431,7 @@
 			});
 		}
 		click(obj) {
-			brush = this.type;
+			if (!obj.hidden) brush = this.type;
 		}
 		update(obj) {
 			obj.hidden = !keyboard.pressed("s");

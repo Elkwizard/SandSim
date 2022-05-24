@@ -1180,7 +1180,7 @@
 		}, (x, y) => {
 			if (Random.bool(.7)) Element.trySetCell(x, y - 1, TYPES.SMOKE);
 			Element.trySetCell(x, y - 1, Random.bool(.3) ? TYPES.MOLTEN_WAX : TYPES.HONEY);
-		}, 0.1),
+		}),
 		[TYPES.BEE]: new Element(2, [new Color("#e8d207"), new Color("#ffe812"), new Color("#f5e764"), new Color("#e6d42c"), new Color("#d1a81f"), new Color("#bd940d")], 0, 0.05, (x, y) => {
 			const angle = Random.angle();
 			const cos = Math.cos(angle);

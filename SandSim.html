@@ -1165,17 +1165,18 @@
 				Element.trySetCell(x - 1, y, TYPES.BEE);
 				Element.trySetCell(x + 1, y, TYPES.BEE);
 			}
-			else Element.updateCell(x, y);
-
+			
 			if (Random.bool(.001)) Element.trySetCell(x, y + 1, TYPES.HONEY);
-			else Element.updateCell(x, y);
 
-			if (Random.bool(.0000001)
-				&& Element.threeCheck(x, y - 1, TYPES.HIVE)
-				&& Element.threeCheck(x, y + 1, TYPES.HIVE)
-				&& Element.threeCheck(x - 2, y, TYPES.HIVE)
-				&& Element.threeCheck(x + 2, y, TYPES.HIVE)) Element.setCell(x, y, TYPES.GRAINY_WAX);
-			else Element.updateCell(x, y);
+			if (
+				Random.bool(.0000001) &&
+				Element.threeCheck(x, y - 1, TYPES.HIVE) &&
+				Element.threeCheck(x, y + 1, TYPES.HIVE) &&
+				Element.threeCheck(x - 2, y, TYPES.HIVE) &&
+				Element.threeCheck(x + 2, y, TYPES.HIVE)
+			) Element.setCell(x, y, TYPES.GRAINY_WAX);
+
+			Element.updateCell(x, y);
 
 		}, (x, y) => {
 			if (Random.bool(.7)) Element.trySetCell(x, y - 1, TYPES.SMOKE);

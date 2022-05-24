@@ -500,9 +500,9 @@
 	}
 
 	const GRAVITY = 0.5 / CELL;
-	const DISPERSION = 4;
+	const DISPERSION = 0.5;
 
-	const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE, TYPES.PARTICLE]);
+	const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE]);
 	const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, TYPES.STEAM, TYPES.SMOKE, TYPES.HYDROGEN]);
 	const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL]);
 	const SALT_WATER_SWAP_PASSTHROUGH = new Set([TYPES.WATER]);
@@ -513,44 +513,63 @@
 	const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
 
 	const fluidUpdate = (x, y, direction, accel, passthrough) => {
-		const cell = grid[x][y];
-		const { vel } = cell;
+		const { vel } = grid[x][y];
 		vel.y += accel;
 
-		const dy = direction * (1 + Math.round(vel.y));
+		const vx = x + Math.sign(vel.x) * Math.ceil(Math.abs(vel.x));
+		const vy = y + Math.sign(vel.y) * Math.ceil(Math.abs(vel.y));
 
-		let fell = false;
-		if (Element.tryMove(x, y, x, y + dy, passthrough)) {
-			fell = true;
-		} else {
-			if (vel.y > 5) {
-				vel.rotate(Random.angle()).div(2);
-				cell.acts = cell.id;
-				cell.id = TYPES.PARTICLE;
-				return;
-			}
-			
-			const b = Random.bool() ? -1 : 1;
-			const disp = Random.range(0, DISPERSION);
-			for (let i = -1; i <= 1; i += 2) {
-				const dir = vel.x ? Math.sign(vel.x) : i * b;
-				vel.x += dir * disp;
-				const d = Math.sign(vel.x) * (Math.round(Math.abs(vel.x)) + 1);
-				if (Element.tryMove(x, y, x + d, y + dy, passthrough)) fell = true;
-				else {
-					if (Element.tryMove(x, y, x + d, y, passthrough));
-					else {
-						vel.mul(0);
-						continue;
-					}
-				}
-				break;
-			}
-		}
+		// const d = Random.bool() ? -1 : 1;
 
-		if (fell) {
-			vel.x *= 0.8;
+		// const toTransfer = FLUID_TRANSFER_RATE * vel.y;
+		
+		// if (Element.isEmpty(x, y + 1, passthrough));
+		// else if (Element.isEmpty(x + d, y + 1, passthrough)) {
+		// 	vel.y -= toTransfer;
+		// 	vel.x += d * toTransfer;
+		// } else if (Element.isEmpty(x - d, y + 1, passthrough)) {
+		// 	vel.y -= toTransfer;
+		// 	vel.x -= d * toTransfer;
+		// } else if (Element.isEmpty(x + d, y, passthrough)) {
+		// 	vel.x += d * (DISPERSION + vel.y);
+		// 	vel.y = 0;
+		// } else if (Element.isEmpty(x - d, y, passthrough)) {
+		// 	vel.x -= d * (DISPERSION + vel.y);
+		// 	vel.y = 0;
+		// } else vel.mul(0);
+
+		vel.x += Random.range(-DISPERSION, DISPERSION);
+
+		const e = 0.8;
+
+		if (!Element.tryMove(x, y, vx, vy, passthrough)) {
+			vel.mul(-e);
 		}
+		// const dy = direction * (1 + Math.round(vel.y));
+
+		// let fell = false;
+		// if (Element.tryMove(x, y, x, y + dy, passthrough)) fell = true;
+		// else {
+		// 	const b = Random.bool() ? -1 : 1;
+		// 	const disp = Random.range(0, DISPERSION);
+		// 	for (let i = -1; i <= 1; i += 2) {
+		// 		const dir = vel.x ? Math.sign(vel.x) : i * b;
+		// 		vel.x += dir * disp;
+		// 		const d = Math.sign(vel.x) * (Math.round(Math.abs(vel.x)) + 1);
+		// 		if (Element.tryMove(x, y, x + d, y + dy, passthrough)) fell = true;
+		// 		else {
+		// 			if (Element.tryMove(x, y, x + d, y, passthrough));
+		// 			else {
+		// 				vel.mul(0);
+		// 				continue;
+		// 			}
+		// 		}
+		// 		break;
+		// 	}
+		// }
+
+		// if (fell)
+		// 	vel.x *= 0.8;
 	};
 
 	const fireUpdate = (x, y, type, up = true) => {
@@ -1265,7 +1284,6 @@
 			}
 		}, () => null, true),
 		[TYPES.PARTICLE]: new Element(1, (x, y) => {
-			// return new Color("#ff000001");
 			return DATA[grid[x][y].acts].getColor(x, y);
 		}, 0, 0, (x, y) => {
 			let base = grid[x][y].acts;
@@ -1287,7 +1305,7 @@
 				const ny = Math.round(y + dy * t);
 				if (!Element.isEmpty(nx, ny, PARTICLE_PASSTHROUGH)) {
 					if (lx !== x || ly !== y) {
-						Element.move(x, y, lx, ly);
+						Element.die(x, y);
 						Element.setCell(lx, ly, base);
 						break;
 					} else {

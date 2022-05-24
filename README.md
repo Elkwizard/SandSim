@@ -5,4 +5,4 @@ Coded in JavaScript
 
 Run from SandSim.html
 
-Created by Khosmos and Elkwizard
+Created by Khosmos3 and Elkwizard

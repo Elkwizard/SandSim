@@ -207,9 +207,9 @@
 
 	class Element {
 		static DEFAULT_PASS_THROUGH = new Set([TYPES.AIR]);
-		constructor(alpha, color, flammability = 0, update = () => null, onburn = () => null, drawType = "random", reference = false) {
+		constructor(alpha, color, resistance = 0, flammability = 0, update = () => null, onburn = () => null, reference = false) {
 			this.color = color;
-			this.drawType = drawType;
+			this.resistance = resistance;
 			this.flammability = flammability;
 			this.onburn = onburn;
 
@@ -398,7 +398,10 @@
 		static isEmpty(x, y, set = Element.DEFAULT_PASS_THROUGH) {
 			if (inBounds(x, y)) {
 				let id = grid[x][y].id;
-				if (DATA[id].reference) id = grid[x][y].acts;
+				if (DATA[id].reference) {
+					if (set.has(id)) return true;
+					id = grid[x][y].acts;
+				}
 				return set.has(id);
 			}
 			return false;
@@ -626,22 +629,44 @@
 
 	const EXPLOSION_PASSTHROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.LIGHTNING, TYPES.AIR, TYPES.PARTICLE]);
 
-	function explode(ox, oy, r = 10, vel = 0.2, passthrough = EXPLOSION_PASSTHROUGH) {
-		for (let i = -r; i <= r; i++) {
-			for (let j = -r; j <= r; j++) {
-				if (i * i + j * j < r * r) {
-					let x = i + ox;
-					let y = j + oy;
-					if (inBounds(x, y) && !Element.isEmpty(x, y, passthrough)) {
-						const cell = grid[x][y];
-						const base = cell.id;
-						Element.setCell(x, y, TYPES.PARTICLE);
-						cell.acts = base;
-						const CHAOS = 10 * vel;
-						cell.vel.set(i * vel + Random.range(-CHAOS, CHAOS), j * vel + Random.range(-CHAOS, CHAOS));
-					}
-				}
+	function explodeLine(x, y, x1, y1, vel, passthrough) {
+		const dx = x1 - x;
+		const dy = y1 - y;
+		const len = Math.sqrt(dx * dx + dy * dy);
+		const ilen = Math.ceil(len);
+		for (let i = 0; i <= ilen; i++) {
+			const t = i / ilen;
+			const ox = Math.round(x + dx * t);
+			const oy = Math.round(y + dy * t);
+
+			if (!inBounds(ox, oy)) break;
+			
+			if (!Element.isEmpty(ox, oy, passthrough)) {
+				const cell = grid[ox][oy];
+				const base = cell.id;
+
+				if (Random.bool(DATA[base].resistance))
+					break;
+
+				Element.setCell(ox, oy, TYPES.PARTICLE);
+				cell.acts = base;
+				const CHAOS = 10 * vel;
+				cell.vel.set(
+					dx * t * vel + Random.range(-CHAOS, CHAOS),
+					dy * t * vel + Random.range(-CHAOS, CHAOS)
+				);
 			}
+		}
+	}
+
+	function explode(ox, oy, r = 10, vel = 0.2, passthrough = EXPLOSION_PASSTHROUGH) {
+		const c = Math.PI * 2 * r;
+
+		for (let i = 0; i < c; i++) {
+			const angle = i / c * Math.PI * 2;
+			const x1 = Math.cos(angle) * r + ox;
+			const y1 = Math.sin(angle) * r + oy;
+			explodeLine(ox, oy, x1, y1, vel, passthrough);
 		}
 	}
 
@@ -671,31 +696,21 @@
 						color = 0xcccccc;
 					else if (p2 > 0.4)
 						color = 0xdddddd;
-					else if (p2 > 0.45)
-						color = 0xeeeeee;
-					else
-						color = 0xffffff;
-				} else
-					color = 0xffffff;
+				}
 			}
 
+			color ??= Random.bool() ? 0xffffff : 0xf7f6f2;;
+
 			return Color.alpha(new Color(color), Color.EPSILON);
-		}),
-		[TYPES.BAD]: new Element(1, Color.WHITE, 0, (x, y) => {
-			Element.tryMove(x, y, x, y + 1);
-		}),
+		}, 0.9),
 
-		[TYPES.INV_BAD]: new Element(1, Color.RED, 0, (x, y) => {
-			Element.tryMove(x, y, x, y - 1);
-		}),
-
-		[TYPES.STONE]: new Element(1, [Color.GRAY, Color.colorScale(Color.GRAY, 0.95)]),
+		[TYPES.STONE]: new Element(1, [Color.GRAY, Color.colorScale(Color.GRAY, 0.95)], 0.8),
 
 		[TYPES.CONDENSED_STONE]: new Element(1, freqColoring([
 			["#3d3c42", 50],
 			["#353438", 50],
 			["#29282c", 1]
-		])),
+		]), 1),
 
 		[TYPES.GLASS]: new Element(.1, [new Color("#7e8d94"), new Color("#838f91")]),
 
@@ -703,7 +718,7 @@
 			["#d6c692", 45],
 			["#decd97", 45],
 			["#e0dab9", 1]
-		]), 0.01, (x, y) => {
+		]), 0.3, 0.01, (x, y) => {
 			solidUpdate(x, y);
 			//place check
 			if (
@@ -733,7 +748,7 @@
 			["#785d42", 45],
 			["#8c6e4f", 45],
 			["#ab836f", 1]
-		]), 0, (x, y) => {
+		]), 0.2, 0, (x, y) => {
 			solidUpdate(x, y);
 		}),
 		[TYPES.SALT]: new Element(1, freqColoring([
@@ -741,11 +756,11 @@
 			["#e3a594", 45],
 			["#edc1b4", 25],
 			["#cf7f67", 1]
-		]), 0, (x, y) => {
+		]), 0.3, 0, (x, y) => {
 			solidUpdate(x, y);
 			Element.mixReact(x, y, TYPES.WATER, TYPES.SALT_WATER, 0.1);
 		}),
-		[TYPES.KELP]: new Element(1, [new Color("#2c6c6b")], .02, (x, y) => {
+		[TYPES.KELP]: new Element(1, [new Color("#2c6c6b")], 0, .02, (x, y) => {
 			//see if it is max height
 			if (grid[x][y].acts < Random.int(90, 150)) {
 
@@ -804,7 +819,7 @@
 			Element.trySetCell(x, y - 1, Random.bool(.4) ? TYPES.SMOKE : TYPES.STEAM);
 		}),
 
-		[TYPES.KELP_TOP]: new Element(1, [new Color("#2c6c6b")], .02, (x, y) => {
+		[TYPES.KELP_TOP]: new Element(1, [new Color("#2c6c6b")], 0, .02, (x, y) => {
 			if (grid[x][y].acts == 4) {
 				for (let i = 1; i < 6; i += 2) {
 					if (Element.isType(x + 1, y + i, TYPES.WATER) && Element.isType(x - 1, y + i, TYPES.WATER)) {
@@ -851,13 +866,13 @@
 			Element.trySetCell(x, y - 1, Random.bool(.4) ? TYPES.SMOKE : TYPES.STEAM);
 		}),
 
-		[TYPES.PNEUMATOCYST]: new Element(70, [new Color("#bff55b")], .04, (x, y) => {
+		[TYPES.PNEUMATOCYST]: new Element(70, [new Color("#bff55b")], 0, .04, (x, y) => {
 
 		}, (x, y) => {
 			Element.trySetCell(x, y - 1, TYPES.HYDROGEN);
 		}),
 
-		[TYPES.COAL]: new Element(1, [new Color("#36454f"), new Color("#2d3b45"), new Color("#2d3b45")], 0.15, solidUpdate, (x, y) => {
+		[TYPES.COAL]: new Element(1, [new Color("#36454f"), new Color("#2d3b45"), new Color("#2d3b45")], 0.6, 0.15, solidUpdate, (x, y) => {
 			Element.trySetCell(x, y - 1, TYPES.SMOKE);
 		}),
 		/*
@@ -871,8 +886,8 @@
 			Element.setCell(x, y, TYPES.LIQUID_SILVER);
 			return true;
 		}),*/
-		[TYPES.LIQUID_COPPER]: new Element(20, [Color.BROWN, Color.ORANGE], 0, liquidUpdate),
-		[TYPES.COPPER]: new Element(10, [Color.lerp(Color.ORANGE, Color.RED, 0.5), Color.RED], 0.05, solidUpdate, (x, y) => {
+		[TYPES.LIQUID_COPPER]: new Element(20, [Color.BROWN, Color.ORANGE], 0, 0, liquidUpdate),
+		[TYPES.COPPER]: new Element(10, [Color.lerp(Color.ORANGE, Color.RED, 0.5), Color.RED], 0.4, 0.05, solidUpdate, (x, y) => {
 			Element.setCell(x, y, TYPES.LIQUID_COPPER);
 			return true;
 		}),
@@ -880,28 +895,28 @@
 			if (Element.isEmpty(x, y - 1))
 				grid[x][y - 1].id = TYPES.SMOKE;
 		}),
-		[TYPES.STEAM]: new Element(0, [Color.alpha(Color.LIGHT_GRAY, 0.8), Color.alpha(Color.LIGHT_GRAY, 0.8), new Color("#88989d")], 0, (x, y) => {
+		[TYPES.STEAM]: new Element(0, [Color.alpha(Color.LIGHT_GRAY, 0.8), Color.alpha(Color.LIGHT_GRAY, 0.8), new Color("#88989d")], 0, 0, (x, y) => {
 			gasUpdate(x, y);
 			Element.updateCell(x, y);
 			if (Random.bool(0.0004))
 				Element.setCell(x, y, TYPES.WATER);
 		}),
 
-		[TYPES.ICE]: new Element(1, [new Color("#d7e3f5"), new Color("#cadbe8")], 0.01, (x, y) => {
+		[TYPES.ICE]: new Element(1, [new Color("#d7e3f5"), new Color("#cadbe8")], 0.1, 0.01, (x, y) => {
 
 		}, (x, y) => {
 			Element.setCell(x, y, TYPES.WATER);
 			return true;
 		}),
 
-		[TYPES.WAX]: new Element(1, [new Color("#f3e3c2"), new Color("#f3e3c2"), new Color("#f0e0c0"), new Color("#f5e7cb")], 0.05, (x, y) => {
+		[TYPES.WAX]: new Element(1, [new Color("#f3e3c2"), new Color("#f3e3c2"), new Color("#f0e0c0"), new Color("#f5e7cb")], 0.1, 0.05, (x, y) => {
 
 		}, (x, y) => {
 			Element.setCell(x, y, TYPES.MOLTEN_WAX);
 			return true;
 		}),
 
-		[TYPES.GRAINY_WAX]: new Element(1, [new Color("#f3e3c2"), new Color("#f3e3c2"), new Color("#f7eedc"), new Color("#f5e7cb"), new Color("#f5e7cb")], 0.06, (x, y) => {
+		[TYPES.GRAINY_WAX]: new Element(1, [new Color("#f3e3c2"), new Color("#f3e3c2"), new Color("#f7eedc"), new Color("#f5e7cb"), new Color("#f5e7cb")], 0.05, 0.06, (x, y) => {
 			solidUpdate(x, y);
 			let arr = Element.getNeighborsOfType(x, y, TYPES.GRAINY_WAX);
 			if (arr[0] && arr[2] && arr[4] && arr[6] && Random.bool(.2)) Element.setCell(x, y, TYPES.WAX);
@@ -911,17 +926,17 @@
 			return true;
 		}),
 
-		[TYPES.MOLTEN_WAX]: new Element(2, [new Color("#f7eedc"), new Color("#f5e7cb"), new Color("#f5e7cb")], 0, (x, y) => {
+		[TYPES.MOLTEN_WAX]: new Element(2, [new Color("#f7eedc"), new Color("#f5e7cb"), new Color("#f5e7cb")], 0.05, 0, (x, y) => {
 			liquidUpdate(x, y);
 			if (Random.bool(.001)) Element.setCell(x, y, TYPES.GRAINY_WAX);
 			else Element.updateCell(x, y);
 		}),
 
-		[TYPES.SMOKE]: new Element(.5, [Color.DARK_GRAY, new Color("#232326")], 0, (x, y) => {
+		[TYPES.SMOKE]: new Element(.5, [Color.DARK_GRAY, new Color("#232326")], 0, 0, (x, y) => {
 			gasUpdate(x, y);
 		}),
 
-		[TYPES.HYDROGEN]: new Element(5, [new Color("#74d6cc")], .5, (x, y) => {
+		[TYPES.HYDROGEN]: new Element(5, [new Color("#74d6cc")], 0, .5, (x, y) => {
 			gasUpdate(x, y);
 		}, (x, y) => {
 			if (Random.bool(.03)) {
@@ -934,12 +949,12 @@
 			["#926829", 30],
 			["#9b7653", 30],
 			["#555555", 1]
-		]), 0.01, (x, y) => {
+		]), 0.3, 0.01, (x, y) => {
 			solidUpdate(x, y);
 			Element.consumeReact(x, y, TYPES.WATER, TYPES.DAMP_SOIL);
 		}),
 
-		[TYPES.ROOT]: new Element(1, [new Color("#bfb19b")], .02, (x, y) => {
+		[TYPES.ROOT]: new Element(1, [new Color("#bfb19b")], 0.3, .02, (x, y) => {
 
 		}, (x, y) => {
 			Element.trySetCell(x, y - 1, Random.bool(.7) ? TYPES.SMOKE : TYPES.STEAM);
@@ -949,7 +964,7 @@
 			["#34292c", 35],
 			["#4f3f32", 35],
 			["#666666", 1]
-		]), 0.01, (x, y) => {
+		]), 0.4, 0.01, (x, y) => {
 			solidUpdate(x, y)
 
 			if (Element.isType(x, y - 1, TYPES.WATER))
@@ -1002,7 +1017,7 @@
 			return true;
 		}),
 
-		[TYPES.GRASS]: new Element(1, [new Color("#53f581"), new Color("#33d44e")], .03, (x, y) => {
+		[TYPES.GRASS]: new Element(1, [new Color("#53f581"), new Color("#33d44e")], 0.05, .03, (x, y) => {
 			let shift = Random.bool(.9) ? 0 : Math.floor(Math.random() * 3) - 1;
 
 			if (Element.isType(x + shift, y - 1, TYPES.AIR) && inBounds(x + shift, y - 1)) {
@@ -1050,7 +1065,7 @@
 		}, (x, y) => {
 			Element.trySetCell(x, y - 1, Random.bool(.6) ? TYPES.SMOKE : TYPES.STEAM);
 		}, "checker"),
-		[TYPES.FLOWER]: new Element(5, [Color.RAZZMATAZZ, Color.RAZZMATAZZ, Color.RAZZMATAZZ, Color.RED, Color.SKY_BLUE, Color.YELLOW, Color.WHITE, Color.ORANGE], .07, (x, y) => {
+		[TYPES.FLOWER]: new Element(5, [Color.RAZZMATAZZ, Color.RAZZMATAZZ, Color.RAZZMATAZZ, Color.RED, Color.SKY_BLUE, Color.YELLOW, Color.WHITE, Color.ORANGE], 0, .07, (x, y) => {
 			let arr = Element.getNeighborsOfType(x, y, TYPES.GRASS)
 			if (arr[0] || arr[2] || arr[4]) Element.setCell(x, y, TYPES.GRASS);
 			else Element.setCell(x, y, TYPES.FLOWER);
@@ -1060,7 +1075,7 @@
 				else Element.setCell(x, y - 1, TYPES.STEAM);
 			}
 		}),
-		[TYPES.WATER]: new Element(0, [new Color("#1202a4"), new Color("#201190")], 0.05, (x, y) => {
+		[TYPES.WATER]: new Element(0, [new Color("#1202a4"), new Color("#201190")], 0.6, 0.05, (x, y) => {
 			fluidUpdate(x, y, 1, GRAVITY, WATER_PASS_THROUGH);
 		}, (x, y) => {
 			Element.trySetCell(x, y - 1, TYPES.STEAM);
@@ -1069,7 +1084,7 @@
 		[TYPES.SALT_WATER]: new Element(0, freqColoring([
 			["#264039", 30],
 			["#1e3630", 30]
-		]), 0.05, (x, y) => {
+		]), 0.65, 0.05, (x, y) => {
 			fluidUpdate(x, y, 1, GRAVITY, WATER_PASS_THROUGH);
 			if (Random.bool(1.0)) {
 				const angle = Random.angle();
@@ -1084,7 +1099,7 @@
 			Element.setCell(x, y, TYPES.SALT);
 			return true;
 		}),
-		[TYPES.POWER_LAVA]: new Element(100, [Color.CYAN, Color.BLUE, Color.SKY_BLUE], 0, (x, y) => {
+		[TYPES.POWER_LAVA]: new Element(100, [Color.CYAN, Color.BLUE, Color.SKY_BLUE], 0.6, 0, (x, y) => {
 			liquidUpdate(x, y);
 
 			Element.react(x, y - Math.floor((Math.random() * 6)), TYPES.AIR, TYPES.BLUE_FIRE, 0.007);
@@ -1095,7 +1110,7 @@
 
 			lavaUpdate(x, y, TYPES.BLUE_FIRE);
 		}),
-		[TYPES.LAVA]: new Element(100, [new Color("#bf1000"), new Color("#bf2010")], 0, (x, y) => {
+		[TYPES.LAVA]: new Element(100, [new Color("#bf1000"), new Color("#bf2010")], 0.6, 0, (x, y) => {
 			liquidUpdate(x, y);
 
 			lavaUpdate(x, y, TYPES.FIRE);
@@ -1126,14 +1141,14 @@
 			["#cc2157", 30],
 			["#b82352", 30],
 			["#d13f6d", 1]
-		]), 0.2, (x, y) => null, (x, y) => {
+		]), 0.1, 0.2, (x, y) => null, (x, y) => {
 			Element.trySetCell(x, y - 1, TYPES.SMOKE);
 		}),
-		[TYPES.WOOD]: new Element(1, [new Color("#6A4B35"), new Color("#553C2A"), new Color("#443022")], 0.05, () => null, (x, y) => {
+		[TYPES.WOOD]: new Element(1, [new Color("#6A4B35"), new Color("#553C2A"), new Color("#443022")], 0.7, 0.05, () => null, (x, y) => {
 			Element.trySetCell(x, y - 1, TYPES.SMOKE);
 		}),
 
-		[TYPES.HONEY]: new Element(0, [new Color("#a66c16")], 0.05, (x, y) => {
+		[TYPES.HONEY]: new Element(0, [new Color("#a66c16")], 0.9, 0.05, (x, y) => {
 			fluidUpdate(x, y, 1, GRAVITY, WATER_PASS_THROUGH);
 		}, (x, y) => {
 			Element.trySetCell(x, y - 1, TYPES.STEAM);
@@ -1141,7 +1156,7 @@
 			return true;
 		}),
 
-		[TYPES.HIVE]: new Element(1, [new Color("#de9e1d"), new Color("#d9b85d"), new Color("#d9b85d")], 0.02, (x, y) => {
+		[TYPES.HIVE]: new Element(1, [new Color("#de9e1d"), new Color("#d9b85d"), new Color("#d9b85d")], 0.3, 0.02, (x, y) => {
 			if (Random.bool(.00001)) {
 				Element.trySetCell(x, y - 1, TYPES.BEE);
 				Element.trySetCell(x - 1, y, TYPES.BEE);
@@ -1162,8 +1177,8 @@
 		}, (x, y) => {
 			if (Random.bool(.7)) Element.trySetCell(x, y - 1, TYPES.SMOKE);
 			Element.trySetCell(x, y - 1, Random.bool(.3) ? TYPES.MOLTEN_WAX : TYPES.HONEY);
-		}),
-		[TYPES.BEE]: new Element(2, [new Color("#e8d207"), new Color("#ffe812"), new Color("#f5e764"), new Color("#e6d42c"), new Color("#d1a81f"), new Color("#bd940d")], 0.05, (x, y) => {
+		}, 0.1),
+		[TYPES.BEE]: new Element(2, [new Color("#e8d207"), new Color("#ffe812"), new Color("#f5e764"), new Color("#e6d42c"), new Color("#d1a81f"), new Color("#bd940d")], 0, 0.05, (x, y) => {
 			const angle = Random.angle();
 			const cos = Math.cos(angle);
 			const sin = Math.sin(angle);
@@ -1174,11 +1189,11 @@
 		}),
 		[TYPES.BLUE_FIRE]: new Element(200, [
 			Color.CYAN, Color.BLUE, Color.SKY_BLUE, Color.LIME
-		], 0, (x, y) => fireUpdate(x, y, TYPES.BLUE_FIRE, false)),
+		], 0, 0, (x, y) => fireUpdate(x, y, TYPES.BLUE_FIRE, false)),
 		[TYPES.FIRE]: new Element(120, [
 			Color.ORANGE, Color.RED, Color.YELLOW, Color.BROWN
-		], 0, (x, y) => fireUpdate(x, y, TYPES.FIRE)),
-		[TYPES.ACID]: new Element(40, Color.LIME, 0, (x, y) => {
+		], 0, 0, (x, y) => fireUpdate(x, y, TYPES.FIRE)),
+		[TYPES.ACID]: new Element(40, Color.LIME, 0, 0, (x, y) => {
 			const cell = grid[x][y];
 			Element.affectNeighbors(x, y, (x, y) => {
 				if (!Element.isType(x, y, TYPES.ACID) && !Element.isType(x, y, TYPES.GLASS) && !Element.isType(x, y, TYPES.GLASS) && Random.bool(0.5)) {
@@ -1203,7 +1218,7 @@
 		}),
 		[TYPES.ELECTRIFIED_ELEMENT]: new Element(40, [
 			Color.CREAM
-		], 0, (x, y) => {
+		], 0, 0, (x, y) => {
 			let base = grid[x][y].acts;
 			neighborLoop: for (let i = -1; i <= 1; i += 2)
 				for (let j = -1; j <= 1; j += 2) {
@@ -1235,7 +1250,7 @@
 		}, () => null, true),
 		[TYPES.PARTICLE]: new Element(1, (x, y) => {
 			return DATA[grid[x][y].acts].getColor(x, y);
-		}, 0, (x, y) => {
+		}, 0, 0, (x, y) => {
 			let base = grid[x][y].acts;
 			const { vel } = grid[x][y];
 			vel.y += GRAVITY;
@@ -1265,8 +1280,8 @@
 					0, 1, 0.5, 1.3
 				)
 			);
-		}),
-		[TYPES.CLAY]: new Element(1, [new Color("#9c8b79"), new Color("#a8987d")], 0.2, solidUpdate, (x, y) => {
+		}, 0.5, 0.4),
+		[TYPES.CLAY]: new Element(1, [new Color("#9c8b79"), new Color("#a8987d")], 0.3, 0.2, solidUpdate, (x, y) => {
 			Element.setCell(x, y, TYPES.BRICK);
 			return true;
 		}),
@@ -1325,12 +1340,67 @@
 
 			Element.updateCell(x, y);
 		}),
-		[TYPES.LIGHT]: new Element(255, new Color(255, 200, 100), 0.001, () => null, (x, y) => {
+		[TYPES.LIGHT]: new Element(255, new Color(255, 200, 100), 0.9, 0.001, () => null, (x, y) => {
 			Element.die(x, y);
 			makeCircle(x, y, TYPES.LIGHTNING, 10);
 			return true;
 		})
 	};
+
+	const ELEMENT_COUNT = Object.keys(TYPES).length;
+
+	function typeName(type) {
+		return Object.entries(TYPES)
+			.find(([k, v]) => v === type)[0]
+			.split("_")
+			.map(word => word.toLowerCase().capitalize())
+			.join(" ");
+	}
+
+	class TYPE_SELECTOR extends ElementScript {
+		static SIZE = 30;
+		init(obj, type) {
+			obj.scripts.removeDefault();
+			this.type = type;
+			this.name = typeName(type);
+			this.tex = new Texture(Math.ceil(obj.width / CELL), Math.ceil(obj.height / CELL));
+			const element = DATA[type];
+			this.tex.shader((x, y, dest) => {
+				dest.set(element.getColor(x, y));
+				dest.alpha = 1;
+			});
+		}
+		click(obj) {
+			brush = this.type;
+		}
+		update(obj) {
+			obj.hidden = !keyboard.pressed("s");
+		}
+		draw(obj, name, shape) {
+			renderer.clip().infer(shape);
+			renderer.image(this.tex).infer(shape);
+			renderer.unclip();
+			const selected = brush === this.type;
+			obj.layer = +selected;
+			renderer.stroke(selected ? Color.YELLOW : Color.WHITE, selected ? 3 : 1).infer(shape);
+			if (obj.hovered || selected) {
+				renderer.draw(new Color(255, 255, 255, 0.3)).infer(shape);
+				if (obj.hovered) {
+					renderer.textMode = TextMode.TOP_CENTER;
+					renderer.draw(Color.WHITE).text(Font.Arial20, this.name, 0, obj.height / 2 + 10);
+				}
+			}
+		}
+		static create(type, x, y) {
+			const button = scene.main.addUIElement("button", x + this.SIZE / 2, y + this.SIZE / 2, this.SIZE, this.SIZE);
+			button.scripts.add(TYPE_SELECTOR, type);
+			return button;
+		}
+	}
+
+	for (let i = 0; i < ELEMENT_COUNT; i++) {
+		TYPE_SELECTOR.create(i, TYPE_SELECTOR.SIZE * i, 0);
+	}
 
 	if (false) {
 		const x0 = (WIDTH >> 1) - (HEIGHT >> 1);
@@ -1360,11 +1430,11 @@
 	const rays = createGodRays(tex, 1, 1);
 
 	function lastBrush() {
-		brush = (brush - 1 + Object.entries(TYPES).length) % Object.entries(TYPES).length;
+		brush = (brush - 1 + ELEMENT_COUNT) % ELEMENT_COUNT;
 	}
 
 	function nextBrush() {
-		brush = (brush + 1) % Object.entries(TYPES).length;
+		brush = (brush + 1) % ELEMENT_COUNT;
 	}
 
 	intervals.continuous(time => {
@@ -1376,13 +1446,18 @@
 		}
 
 		if (keyboard.justPressed("p")) paused = !paused;
+		const SELECTORS_SHOWN = keyboard.pressed("s");
 
 		if (mouse.wheelDelta > 0) lastBrush();
 		if (mouse.wheelDelta < 0) nextBrush();
 
 		for (const touch of touches.allPressed) {
 			const r = brushSize;
-			const { x: ox, y: oy } = Vector2.floor(touches.get(touch).screen.over(CELL));
+			const { screen } = touches.get(touch);
+
+			if (SELECTORS_SHOWN && screen.y < TYPE_SELECTOR.SIZE) continue;
+
+			const { x: ox, y: oy } = Vector2.floor(screen.over(CELL));
 
 			if (brush === TYPES.PARTICLE)
 				explode(ox, oy, r);
@@ -1486,7 +1561,9 @@
 			//renderer.stroke(Color.RED).rect(i * CHUNK * CELL, j * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
 		}
 
-
-		renderer.draw(Color.WHITE).text(Font.Arial20, `brush: ${Object.entries(TYPES).find(e => e[1] == brush)[0]}, brushSize: ${brushSize}, paused: ${paused}, fps: ${intervals.fps}`, 10, 10);
-	}, IntervalFunction.AFTER_UPDATE);
+		if (!SELECTORS_SHOWN) {
+			renderer.textMode = TextMode.TOP_LEFT;
+			renderer.draw(Color.WHITE).text(Font.Arial20, `brush: ${typeName(brush)}, brushSize: ${brushSize}, paused: ${paused}, fps: ${intervals.fps}`, 10, 10);
+		}
+	}, IntervalFunction.UPDATE);
 </script>

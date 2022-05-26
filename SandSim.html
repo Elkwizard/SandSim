@@ -155,7 +155,7 @@
 	};
 
 	const TYPES = Object.fromEntries([
-		"AIR", "WATER", "MARBLE", "CONDENSED_STONE", "LAVA", "LIGHTNING", "BRICK", "CLAY", "PARTICLE", "BEE", "HIVE", "HONEY", "SUGAR", "SALT", "SALT_WATER", "GRASS", "SOIL", "DAMP_SOIL", "ROOT", "KELP_TOP", "COPPER", "PNEUMATOCYST", "SAND", "KELP", "WOOD", "STEAM", "SMOKE", "STONE", "COAL", "WAX", "GRAINY_WAX", "MOLTEN_WAX", "FIRE", "ICE", "HYDROGEN", "FLOWER", "ACID", "POWER_LAVA", "GLASS", "OIL", "FUSE", "BLUE_FIRE", "ELECTRIFIED_ELEMENT", "LIGHT",
+		"AIR", "DDT", "STEEL", "WATER", "MARBLE", "CONDENSED_STONE", "LAVA", "LIGHTNING", "BRICK", "CLAY", "PARTICLE", "BEE", "HIVE", "HONEY", "SUGAR", "SALT", "SALT_WATER", "GRASS", "SOIL", "DAMP_SOIL", "ROOT", "KELP_TOP", "COPPER", "PNEUMATOCYST", "SAND", "KELP", "WOOD", "STEAM", "SMOKE", "STONE", "COAL", "WAX", "GRAINY_WAX", "MOLTEN_WAX", "FIRE", "ICE", "HYDROGEN", "FLOWER", "ACID", "POWER_LAVA", "GLASS", "OIL", "FUSE", "BLUE_FIRE", "ELECTRIFIED_ELEMENT", "LIGHT",
 		// "GOLD", "LIQUID_GOLD",
 		// "SILVER", "LIQUID_SILVER",
 		"LIQUID_COPPER",
@@ -503,15 +503,15 @@
 	const DISPERSION = 4;
 
 	const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE, TYPES.PARTICLE]);
-	const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, TYPES.STEAM, TYPES.SMOKE, TYPES.HYDROGEN]);
+	const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, TYPES.STEAM, TYPES.SMOKE, TYPES.HYDROGEN, TYPES.DDT]);
 	const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL]);
 	const SALT_WATER_SWAP_PASSTHROUGH = new Set([TYPES.WATER]);
 	const SOLID_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.WATER, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_SILVER, TYPES.LIQUID_GOLD, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_MAX, TYPES.SALT_WATER]);
 	const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASS_THROUGH, TYPES.AIR, TYPES.PARTICLE]);
-	const CONDUCTIVE = new Set([TYPES.COPPER, TYPES.WATER, TYPES.SALT_WATER]);
 	const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 	const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
-
+	const CONDUCTIVE = new Set([TYPES.COPPER, TYPES.STEEL, ...WATER_TYPES]);
+	
 	const fluidUpdate = (x, y, direction, accel, passthrough) => {
 		const cell = grid[x][y];
 		const { vel } = cell;
@@ -700,9 +700,42 @@
 		return coloring;
 	}
 
-
 	const DATA = {
 		[TYPES.AIR]: new Element(0, Color.BLANK),
+		[TYPES.STEEL]: new Element(1, (x, y) => {
+			let color;
+
+			const angle = Math.PI / 4;
+			const c = Math.cos(angle);
+			const s = Math.sin(angle);
+			[x, y] = [x * c - y * s, x * s + y * c];
+			
+			const S = 7;
+			let ix = Math.floor(x / S);
+			let iy = Math.floor(y / S);
+			x += (iy % 2 ? S >> 1 : 0);
+			let gx = (x % S + S) % S;
+			let gy = (y % S + S) % S;
+			ix = Math.floor(x / S);
+			iy = Math.floor(y / S);
+			if ((ix + iy % 2) % 2)
+				[gx, gy] = [gy, gx];
+			
+			const a = S / 2;
+			const b = S / 8;
+
+			if ((gx - S * 0.5) ** 2 / a ** 2 + (gy - S * 0.5) ** 2 / b ** 2 < 1)
+				color = new Color("#82786f");
+			else color = Random.bool() ? new Color("#b5a79a") : new Color("#a89c92");
+
+
+
+			return Color.alpha(color, Color.EPSILON);
+		}, 0.9),
+		[TYPES.DDT]: new Element(5, Color.PURPLE, 1, 1, (x, y) => {
+			gasUpdate(x, y);
+			Element.consumeReact(x, y, TYPES.BEE, TYPES.AIR);
+		}),
 		[TYPES.MARBLE]: new Element(1, (x, y) => {
 			const p = Random.octave(5, Random.perlin2D, x, y, 0.1);
 			let color;
@@ -1202,7 +1235,7 @@
 			const angle = Random.angle();
 			const cos = Math.cos(angle);
 			const sin = Math.sin(angle);
-			if (!Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin)))
+			if (!Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin), LIQUID_PASS_THROUGH))
 				Element.updateCell(x, y);
 		}, (x, y) => {
 			makeCircle(x, y - 1, TYPES.HONEY, 2);

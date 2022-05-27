@@ -563,7 +563,7 @@
 	const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASS_THROUGH, TYPES.AIR, TYPES.PARTICLE]);
 	const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 	const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
-	const CONDUCTIVE = new Set([TYPES.COPPER, TYPES.STEEL, ...WATER_TYPES]);
+	const CONDUCTIVE = new Set([TYPES.COPPER, TYPES.LIQUID_COPPER, TYPES.STEEL, ...WATER_TYPES]);
 	const ELECTRIFIED_ELEMENT_PASSTHROUGH = new Set([...CONDUCTIVE, TYPES.ELECTRIFIED_ELEMENT]);
 
 	const fluidUpdate = (x, y, direction, accel, passthrough) => {
@@ -835,7 +835,7 @@
 				!Element.isType(x - 1, y + 1, TYPES.WATER) &&
 				!Element.isType(x + 1, y + 1, TYPES.WATER)
 			) {
-				if (Random.bool(.00001)) {
+				if (Random.bool(.00002)) {
 					//kelp check
 					const arr = Element.getNeighborsOfType(x, y, TYPES.KELP);
 					const arr2 = Element.getNeighborsOfType(x - 2, y, TYPES.KELP);
@@ -873,7 +873,7 @@
 			if (grid[x][y].acts < Random.int(90, 150)) {
 
 				//see if it can happen
-				if (Random.bool(.001)) {
+				if (Random.bool(.05)) {
 
 					if (Element.threeCheck(x, y - 1, TYPES.WATER) && Element.threeCheck(x, y - 2, TYPES.WATER) && Element.isType(x + 1, y, TYPES.WATER) && Element.isType(x - 1, y, TYPES.WATER) && inBounds(x, y - 1)) {
 						//maybe it'll happen
@@ -994,9 +994,22 @@
 			Element.setCell(x, y, TYPES.LIQUID_SILVER);
 			return true;
 		}),*/
-		[TYPES.LIQUID_COPPER]: new Element(20, [Color.BROWN, Color.ORANGE], 0, 0, liquidUpdate),
-		[TYPES.COPPER]: new Element(10, [Color.lerp(Color.ORANGE, Color.RED, 0.5), Color.RED], 0.4, 0.05, solidUpdate, (x, y) => {
-			Element.setCell(x, y, TYPES.LIQUID_COPPER);
+		[TYPES.LIQUID_COPPER]: new Element(20, [new Color("#a35a33"), new Color("#8c4c24")], 0, 0, (x, y) => {
+			liquidUpdate(x, y);
+			Element.consumeReactMany(x, y, WATER_TYPES, TYPES.COPPER);
+			lavaUpdate(x, y, TYPES.FIRE);	
+		}),
+		[TYPES.COPPER]: new Element(10, (x, y) => {
+			let t = Random.perlin(x + y + (Random.bool(.96) ? 0 : 1));
+			if(t > .5){
+				return new Color("#944a3405");
+			}
+			else if (t > .45) return new Color("#752b1505")
+			else if (t > .04) return new Color("#823d1e05");
+			else return new Color("#d4683505");
+		}
+		, 0.4, 0.05, solidUpdate, (x, y) => {
+			if(Random.bool(.0005)) Element.setCell(x, y, TYPES.LIQUID_COPPER);
 			return true;
 		}),
 		[TYPES.OIL]: new Element(1, new Color("#123456"), 0.1, 0.2, liquidUpdate, (x, y) => {
@@ -1132,9 +1145,11 @@
 				if (Random.bool(.001)) {
 					Element.setCell(x + shift, y - 1, TYPES.GRASS);
 				}
-				else if (Random.bool(.0003)) {
+				else if (Random.bool(.0001)) {
 					let arr = Element.getNeighborsOfType(x, y - 1, TYPES.AIR);
-					if (inBounds(x, y - 1) && arr[0] && arr[2] && arr[4] && Element.isType(x + 1, y, TYPES.AIR) && Element.isType(x - 1, y, TYPES.AIR)) Element.setCell(x, y - 1, TYPES.FLOWER);
+					if (inBounds(x, y - 1) && arr[0] && arr[2] && arr[6]){
+						Element.setCell(x, y - 1, TYPES.FLOWER);
+					}
 					else Element.updateCell(x, y);
 				}
 				else Element.updateCell(x, y);
@@ -1173,10 +1188,10 @@
 		}, (x, y) => {
 			Element.trySetCell(x, y - 1, Random.bool(.6) ? TYPES.SMOKE : TYPES.STEAM);
 		}),
-		[TYPES.FLOWER]: new Element(5, [Color.RAZZMATAZZ, Color.RAZZMATAZZ, Color.RAZZMATAZZ, Color.RED, Color.SKY_BLUE, Color.YELLOW, Color.WHITE, Color.ORANGE], 0, .07, (x, y) => {
+		[TYPES.FLOWER]: new Element(5, [Color.RAZZMATAZZ, Color.RAZZMATAZZ, Color.RAZZMATAZZ, Color.RED, Color.SKY_BLUE, Color.CYAN, Color.LAVENDER, Color.MAGENTA, Color.PINK, Color.YELLOW, Color.WHITE, Color.ORANGE], 0, .07, (x, y) => {
 			let arr = Element.getNeighborsOfType(x, y, TYPES.GRASS)
-			if (arr[0] || arr[2] || arr[4]) Element.setCell(x, y, TYPES.GRASS);
-			else Element.setCell(x, y, TYPES.FLOWER);
+			if (arr[0] || arr[2] || arr[6]) Element.setCell(x, y, TYPES.GRASS);
+			else Element.updateCell(x, y);
 		}, (x, y) => {
 			if (Element.isEmpty(x, y - 1)) {
 				if (Math.random() < .6) Element.setCell(x, y - 1, TYPES.SMOKE);
@@ -1255,7 +1270,7 @@
 			Element.trySetCell(x, y - 1, TYPES.SMOKE);
 		}),
 
-		[TYPES.HONEY]: new Element(0, [new Color("#a66c16")], 0.9, 0.05, (x, y) => {
+		[TYPES.HONEY]: new Element(0, [new Color("#996211"), new Color("#8c590d")], 0.9, 0.05, (x, y) => {
 			fluidUpdate(x, y, 1, GRAVITY, WATER_PASS_THROUGH);
 		}, (x, y) => {
 			Element.trySetCell(x, y - 1, TYPES.STEAM);
@@ -1263,7 +1278,15 @@
 			return true;
 		}),
 
-		[TYPES.HIVE]: new Element(1, [new Color("#de9e1d"), new Color("#d9b85d"), new Color("#d9b85d")], 0.3, 0.02, (x, y) => {
+		[TYPES.HIVE]: new Element(1, [new Color("#d9b85d01"), new Color("#de9e1d01")]
+			//et p = Math.round(Random.voronoi2D(x, y, .1) * 7)/7;
+
+			//if(p < .0) return new Color("#d9b85d01")
+			//else return new Color("#de9e1d01")
+			//return Color.lerp(new Color("#d9b85d01"), new Color("#855a0501"), p)
+
+			//	"#de9e1d01")else return new Color("#d9b85d01")
+		, 0.3, 0.02, (x, y) => {
 			if (Random.bool(.00001)) {
 				Element.trySetCell(x, y - 1, TYPES.BEE);
 				Element.trySetCell(x - 1, y, TYPES.BEE);
@@ -1273,7 +1296,7 @@
 			if (Random.bool(.001)) Element.trySetCell(x, y + 1, TYPES.HONEY);
 
 			if (
-				Random.bool(.0000001) &&
+				Random.bool(.0000003) &&
 				Element.threeCheck(x, y - 1, TYPES.HIVE) &&
 				Element.threeCheck(x, y + 1, TYPES.HIVE) &&
 				Element.threeCheck(x - 2, y, TYPES.HIVE) &&
@@ -1299,9 +1322,8 @@
 		[TYPES.BLUE_FIRE]: new Element(200, [
 			Color.CYAN, Color.BLUE, Color.SKY_BLUE, Color.LIME
 		], 0, 0, (x, y) => fireUpdate(x, y, TYPES.BLUE_FIRE, false)),
-		[TYPES.FIRE]: new Element(120, [
-			Color.ORANGE, Color.RED, Color.YELLOW, Color.BROWN
-		], 0, 0, (x, y) => fireUpdate(x, y, TYPES.FIRE)),
+		[TYPES.FIRE]: new Element(140, [new Color("#962a0f"), new Color("#b35e09"), new Color("#c98210"), new Color("#4f1a0a"), new Color("#8a0f04")], 0, 0, (x, y) => fireUpdate(x, y, TYPES.FIRE)),
+
 		[TYPES.ACID]: new Element(40, Color.LIME, 0, 0, (x, y) => {
 			const cell = grid[x][y];
 			Element.affectNeighbors(x, y, (x, y) => {
@@ -1657,8 +1679,8 @@
 				else if (key === "ArrowDown") brushSize = Math.max(brushSize - 1, 1);
 			}
 
-			if (keyboard.justPressed("p")) paused = !paused;
-			const SELECTORS_SHOWN = keyboard.pressed("s");
+		if (keyboard.justPressed(" ")) paused = !paused;
+		const SELECTORS_SHOWN = keyboard.pressed("s");
 
 			if (mouse.wheelDelta > 0) lastBrush();
 			if (mouse.wheelDelta < 0) nextBrush();

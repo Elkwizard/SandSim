@@ -155,7 +155,7 @@
 	};
 
 	const TYPES = Object.fromEntries([
-		"AIR", "DDT", "STEEL", "WATER", "MARBLE", "CONDENSED_STONE", "LAVA", "LIGHTNING", "BRICK", "CLAY", "PARTICLE", "BEE", "HIVE", "HONEY", "SUGAR", "SALT", "SALT_WATER", "GRASS", "SOIL", "DAMP_SOIL", "ROOT", "KELP_TOP", "COPPER", "PNEUMATOCYST", "SAND", "KELP", "WOOD", "STEAM", "SMOKE", "STONE", "COAL", "WAX", "GRAINY_WAX", "MOLTEN_WAX", "FIRE", "ICE", "HYDROGEN", "FLOWER", "ACID", "POWER_LAVA", "GLASS", "OIL", "FUSE", "BLUE_FIRE", "ELECTRIFIED_ELEMENT", "LIGHT",
+		"AIR", "DDT", "STEEL", "WATER", "MARBLE", "CONDENSED_STONE", "LAVA", "LIGHTNING", "BRICK", "CLAY", "PARTICLE", "BEE", "HIVE", "HONEY", "SUGAR", "SALT", "SALT_WATER", "GRASS", "SOIL", "DAMP_SOIL", "ROOT", "KELP_TOP", "COPPER", "PNEUMATOCYST", "SAND", "KELP", "WOOD", "STEAM", "SMOKE", "STONE", "COAL", "WAX", "GRAINY_WAX", "MOLTEN_WAX", "FIRE", "ICE", "HYDROGEN", "FLOWER", "ACID", "POWER_LAVA", "GLASS", "OIL", "FUSE", "BLUE_FIRE", "ELECTRICITY", "LIGHT",
 		// "GOLD", "LIQUID_GOLD",
 		// "SILVER", "LIQUID_SILVER",
 		"LIQUID_COPPER",
@@ -355,7 +355,7 @@
 
 		static setCellId(x, y, id) {
 			const cell = grid[x][y];
-			
+
 			if (DATA[id].reference) {
 				const base = DATA[cell.id].reference ? cell.reference : cell.id;
 				cell.id = id;
@@ -368,7 +368,7 @@
 
 		static setCell(x, y, id) {
 			const cell = grid[x][y];
-			
+
 			if (DATA[id].reference) {
 				const base = DATA[cell.id].reference ? cell.reference : cell.id;
 				cell.id = id;
@@ -564,7 +564,7 @@
 	const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 	const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
 	const CONDUCTIVE = new Set([TYPES.COPPER, TYPES.LIQUID_COPPER, TYPES.STEEL, ...WATER_TYPES]);
-	const ELECTRIFIED_ELEMENT_PASSTHROUGH = new Set([...CONDUCTIVE, TYPES.ELECTRIFIED_ELEMENT]);
+	const ELECTRICITY_PASSTHROUGH = new Set([...CONDUCTIVE, TYPES.ELECTRICITY]);
 
 	const fluidUpdate = (x, y, direction, accel, passthrough) => {
 		const cell = grid[x][y];
@@ -997,19 +997,18 @@
 		[TYPES.LIQUID_COPPER]: new Element(20, [new Color("#a35a33"), new Color("#8c4c24")], 0, 0, (x, y) => {
 			liquidUpdate(x, y);
 			Element.consumeReactMany(x, y, WATER_TYPES, TYPES.COPPER);
-			lavaUpdate(x, y, TYPES.FIRE);	
+			lavaUpdate(x, y, TYPES.FIRE);
 		}),
 		[TYPES.COPPER]: new Element(10, (x, y) => {
 			let t = Random.perlin(x + y + (Random.bool(.96) ? 0 : 1));
-			if(t > .5){
+			if (t > .5) {
 				return new Color("#944a3405");
 			}
 			else if (t > .45) return new Color("#752b1505")
 			else if (t > .04) return new Color("#823d1e05");
 			else return new Color("#d4683505");
-		}
-		, 0.4, 0.05, solidUpdate, (x, y) => {
-			if(Random.bool(.0005)) Element.setCell(x, y, TYPES.LIQUID_COPPER);
+		}, 0.4, 0.05, solidUpdate, (x, y) => {
+			if (Random.bool(.0005)) Element.setCell(x, y, TYPES.LIQUID_COPPER);
 			return true;
 		}),
 		[TYPES.OIL]: new Element(1, new Color("#123456"), 0.1, 0.2, liquidUpdate, (x, y) => {
@@ -1147,7 +1146,7 @@
 				}
 				else if (Random.bool(.0001)) {
 					let arr = Element.getNeighborsOfType(x, y - 1, TYPES.AIR);
-					if (inBounds(x, y - 1) && arr[0] && arr[2] && arr[6]){
+					if (inBounds(x, y - 1) && arr[0] && arr[2] && arr[6]) {
 						Element.setCell(x, y - 1, TYPES.FLOWER);
 					}
 					else Element.updateCell(x, y);
@@ -1286,29 +1285,29 @@
 			//return Color.lerp(new Color("#d9b85d01"), new Color("#855a0501"), p)
 
 			//	"#de9e1d01")else return new Color("#d9b85d01")
-		, 0.3, 0.02, (x, y) => {
-			if (Random.bool(.00001)) {
-				Element.trySetCell(x, y - 1, TYPES.BEE);
-				Element.trySetCell(x - 1, y, TYPES.BEE);
-				Element.trySetCell(x + 1, y, TYPES.BEE);
-			}
+			, 0.3, 0.02, (x, y) => {
+				if (Random.bool(.00001)) {
+					Element.trySetCell(x, y - 1, TYPES.BEE);
+					Element.trySetCell(x - 1, y, TYPES.BEE);
+					Element.trySetCell(x + 1, y, TYPES.BEE);
+				}
 
-			if (Random.bool(.001)) Element.trySetCell(x, y + 1, TYPES.HONEY);
+				if (Random.bool(.001)) Element.trySetCell(x, y + 1, TYPES.HONEY);
 
-			if (
-				Random.bool(.0000003) &&
-				Element.threeCheck(x, y - 1, TYPES.HIVE) &&
-				Element.threeCheck(x, y + 1, TYPES.HIVE) &&
-				Element.threeCheck(x - 2, y, TYPES.HIVE) &&
-				Element.threeCheck(x + 2, y, TYPES.HIVE)
-			) Element.setCell(x, y, TYPES.GRAINY_WAX);
+				if (
+					Random.bool(.0000003) &&
+					Element.threeCheck(x, y - 1, TYPES.HIVE) &&
+					Element.threeCheck(x, y + 1, TYPES.HIVE) &&
+					Element.threeCheck(x - 2, y, TYPES.HIVE) &&
+					Element.threeCheck(x + 2, y, TYPES.HIVE)
+				) Element.setCell(x, y, TYPES.GRAINY_WAX);
 
-			Element.updateCell(x, y);
+				Element.updateCell(x, y);
 
-		}, (x, y) => {
-			if (Random.bool(.7)) Element.trySetCell(x, y - 1, TYPES.SMOKE);
-			Element.trySetCell(x, y - 1, Random.bool(.3) ? TYPES.MOLTEN_WAX : TYPES.HONEY);
-		}),
+			}, (x, y) => {
+				if (Random.bool(.7)) Element.trySetCell(x, y - 1, TYPES.SMOKE);
+				Element.trySetCell(x, y - 1, Random.bool(.3) ? TYPES.MOLTEN_WAX : TYPES.HONEY);
+			}),
 		[TYPES.BEE]: new Element(2, [new Color("#e8d207"), new Color("#ffe812"), new Color("#f5e764"), new Color("#e6d42c"), new Color("#d1a81f"), new Color("#bd940d")], 0, 0.05, (x, y) => {
 			const angle = Random.angle();
 			const cos = Math.cos(angle);
@@ -1347,11 +1346,11 @@
 			else
 				liquidUpdate(x, y);
 		}),
-		[TYPES.ELECTRIFIED_ELEMENT]: new Element(40, Color.CREAM, 0, 0, (x, y) => {
+		[TYPES.ELECTRICITY]: new Element(40, Color.CREAM, 0, 0, (x, y) => {
 			const cell = grid[x][y];
 
 			if (cell.acts === 0) {
-				
+
 				let canConduct = false;
 				Element.affectNeighbors(x, y, (x, y) => {
 					if (Element.isEmpty(x, y, CONDUCTIVE)) canConduct = true;
@@ -1360,7 +1359,7 @@
 
 				if (!canConduct)
 					return Element.die(x, y);
-					
+
 				if (!cell.vel.sqrMag) {
 					const angle = Random.angle();
 					const c = Math.cos(angle);
@@ -1377,20 +1376,20 @@
 					const ox = x + Math.round(vel.x * i);
 					const oy = y + Math.round(vel.y * i);
 					if (ox === x && oy === y) continue;
-					
-					if (!Element.isEmptyReference(ox, oy, ELECTRIFIED_ELEMENT_PASSTHROUGH)) {
+
+					if (!Element.isEmptyReference(ox, oy, ELECTRICITY_PASSTHROUGH)) {
 						blocked = true;
 						break;
 					}
-					if (!Element.isType(ox, oy, TYPES.ELECTRIFIED_ELEMENT)) {
-						Element.setCellId(ox, oy, TYPES.ELECTRIFIED_ELEMENT);
+					if (!Element.isType(ox, oy, TYPES.ELECTRICITY)) {
+						Element.setCellId(ox, oy, TYPES.ELECTRICITY);
 						grid[ox][oy].acts = 1;
 						grid[ox][oy].vel.mul(0);
 					}
 					lx = ox;
 					ly = oy;
 				}
-				
+
 				cell.acts = 1;
 
 				grid[lx][ly].acts = 0;
@@ -1408,7 +1407,7 @@
 			// if (Random.bool(0.1)) cell.vel.rotate(Random.range(-1, 1));
 			// if (!Element.tryMoveReference(x, y, x + Math.round(cell.vel.x), y + Math.round(cell.vel.y), CONDUCTIVE, (x, y, x1, y1) => {
 			// 	Element.dereference(x, y);
-			// 	Element.setCellId(x1, y1, TYPES.ELECTRIFIED_ELEMENT);
+			// 	Element.setCellId(x1, y1, TYPES.ELECTRICITY);
 			// 	grid[x1][y1].vel.set(cell.vel);
 			// })) cell.vel.mul(0);
 
@@ -1421,13 +1420,13 @@
 			// 		const oy = y + j;
 			// 		if (inBounds(ox, oy) && CONDUCTIVE.has(grid[ox][oy].id)) {
 			// 			if (Random.bool(0.25)) {
-			// 				Element.setCellId(ox, oy, TYPES.ELECTRIFIED_ELEMENT);
+			// 				Element.setCellId(ox, oy, TYPES.ELECTRICITY);
 			// 				break neighborLoop;
 			// 			}
 			// 		} else if (inBounds(ox, oy) && grid[ox][oy] !== TYPES.AIR) {
 			// 			const { id } = grid[ox][oy];
 			// 			if (CONDUCTIVE.has(id)) {
-			// 				Element.setCellId(ox, oy, TYPES.ELECTRIFIED_ELEMENT);
+			// 				Element.setCellId(ox, oy, TYPES.ELECTRICITY);
 			// 			} else DATA[id].burn(ox, oy, TYPES.FIRE);
 			// 		}
 			// 	}
@@ -1549,7 +1548,7 @@
 							const { id } = grid[ox][oy];
 							if (id !== TYPES.AIR && id !== TYPES.LIGHTNING) {
 								if (CONDUCTIVE.has(id)) {
-									Element.setCellId(ox, oy, TYPES.ELECTRIFIED_ELEMENT);
+									Element.setCellId(ox, oy, TYPES.ELECTRICITY);
 									grid[ox][oy].vel.mul(0);
 								} else {
 									const data = DATA[id];
@@ -1672,6 +1671,16 @@
 
 	intervals.continuous(time => {
 		try {
+
+			if (keyboard.pressed("Control")) {
+				if (mouse.pressed("Left"))
+					scene.camera.position.add(mouse.worldLast.minus(mouse.world));
+				if (mouse.wheelDelta > 0)
+					scene.camera.zoomOut(0.2);
+				else if (mouse.wheelDelta < 0)
+					scene.camera.zoomIn(0.2);
+			}
+
 			for (const key of keyboard.downQueue) {
 				if (key === "ArrowRight") nextBrush();
 				else if (key === "ArrowLeft") lastBrush();
@@ -1679,19 +1688,27 @@
 				else if (key === "ArrowDown") brushSize = Math.max(brushSize - 1, 1);
 			}
 
-		if (keyboard.justPressed(" ")) paused = !paused;
-		const SELECTORS_SHOWN = keyboard.pressed("s");
+			if (keyboard.justPressed(" ")) paused = !paused;
+			const SELECTORS_SHOWN = keyboard.pressed("s");
+
+			let hovered;
+			{
+				const coord = Vector2.floor(mouse.world.over(CELL));
+				hovered = inBounds(coord.x, coord.y) ? grid[coord.x][coord.y].id : TYPES.AIR;
+			};
 
 			if (mouse.wheelDelta > 0) lastBrush();
 			if (mouse.wheelDelta < 0) nextBrush();
 
-			for (const touch of touches.allPressed) {
+			if (keyboard.released("Control")) for (const touch of touches.allPressed) {
 				const r = brushSize;
-				const { screen } = touches.get(touch);
+				const { world } = touches.get(touch);
 
-				if (SELECTORS_SHOWN && screen.y < TYPE_SELECTOR.SIZE) continue;
+				if (SELECTORS_SHOWN && world.y < TYPE_SELECTOR.SIZE) continue;
 
-				const { x: ox, y: oy } = Vector2.floor(screen.over(CELL));
+				const { x: ox, y: oy } = Vector2.floor(world.over(CELL));
+
+
 
 				if (brush === TYPES.PARTICLE)
 					explode(ox, oy, r);
@@ -1773,52 +1790,55 @@
 
 			for (let i = 0; i < WIDTH; i++) for (let j = 0; j < HEIGHT; j++)
 				lastIds[i][j] = grid[i][j].id;
+			
+			scene.camera.drawInWorldSpace(() => {
 
-			renderer.fill(Color.BLACK);
-			if (RTX) {
-				const image = rays({
-					direction: new Vector2(-1, 1),
-					color: new Color(105, 105, 50),
-					ambient: new Color(200, 200, 200)
-				});
-				renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
-			} else {
-				renderer.image(tex).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
-			}
-
-
-			if (keyboard.pressed("v")) {
-				if (!debugFrame)
-					debugFrame = new FastFrame(width, height);
-
-				for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
-					const chunk = chunks[i][j];
-
-					if (chunk.sleep && chunk.sleepNext)
-						continue;
-
-					const cx = chunk.x * CHUNK;
-					const cy = chunk.y * CHUNK;
-					for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
-						const x = cx + i;
-						const y = cy + j;
-						if (x >= WIDTH || y >= HEIGHT)
-							continue;
-						const cell = grid[x][y];
-						if (cell.vel.sqrMag) {
-							debugFrame.renderer.stroke(Color.RED).arrow(x * CELL, y * CELL, x * CELL + cell.vel.x * CELL, y * CELL + cell.vel.y * CELL);
-						}
-					}
-
-					debugFrame.renderer.stroke(Color.RED).rect(i * CHUNK * CELL, j * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
+				renderer.fill(Color.BLACK);
+				if (RTX) {
+					const image = rays({
+						direction: new Vector2(-1, 1),
+						color: new Color(105, 105, 50),
+						ambient: new Color(200, 200, 200)
+					});
+					renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
+				} else {
+					renderer.image(tex).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
 				}
-				renderer.image(debugFrame).default(0, 0);
-				debugFrame.renderer.clear();
-			}
+
+				if (keyboard.pressed("v")) {
+					if (!debugFrame)
+						debugFrame = new FastFrame(width, height);
+
+					debugFrame.renderer.transform = renderer.transform;
+
+					for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+						const chunk = chunks[i][j];
+
+						if (chunk.sleep && chunk.sleepNext)
+							continue;
+
+						const cx = chunk.x * CHUNK;
+						const cy = chunk.y * CHUNK;
+						for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
+							const x = cx + i;
+							const y = cy + j;
+							if (x >= WIDTH || y >= HEIGHT)
+								continue;
+							const cell = grid[x][y];
+							if (cell.vel.sqrMag) {
+								debugFrame.renderer.stroke(Color.RED).arrow(x * CELL, y * CELL, x * CELL + cell.vel.x * CELL, y * CELL + cell.vel.y * CELL);
+							}
+						}
+
+						debugFrame.renderer.stroke(Color.RED).rect(i * CHUNK * CELL, j * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
+					}
+					renderer.image(debugFrame).default(0, 0);
+					debugFrame.renderer.clear();
+				}
+			});
 
 			if (!paused) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
 				const chunk = chunks[i][j];
-
 				chunk.sleep = chunk.sleepNext;
 				chunk.sleepNext = true;
 			}
@@ -1826,6 +1846,8 @@
 			if (!SELECTORS_SHOWN) {
 				renderer.textMode = TextMode.TOP_LEFT;
 				renderer.draw(Color.WHITE).text(Font.Arial20, `brush: ${typeName(brush)}, brushSize: ${brushSize}, paused: ${paused}, fps: ${intervals.fps}`, 10, 10);
+				renderer.textMode = TextMode.TOP_RIGHT;
+				renderer.draw(Color.WHITE).text(Font.Arial15, hovered ? typeName(hovered) : "", width - 10, 10);
 			}
 		} catch (err) {
 			alert(err.stack);

@@ -169,6 +169,7 @@
 			this.updated = false;
 			this.vel = new Vector2(0, 0);
 			this.acts = 0;
+			this.reference = 0;
 		}
 	}
 
@@ -270,7 +271,6 @@
 					reacted = true;
 				}
 			});
-
 		}
 
 		static mixReact(x, y, reactant, product, chance = 1) {
@@ -354,15 +354,36 @@
 		}
 
 		static setCellId(x, y, id) {
-			grid[x][y].id = id;
+			const cell = grid[x][y];
+			
+			if (DATA[id].reference) {
+				const base = DATA[cell.id].reference ? cell.reference : cell.id;
+				cell.id = id;
+				cell.reference = base;
+			} else {
+				cell.id = id;
+			}
 			this.updateCell(x, y);
 		}
 
 		static setCell(x, y, id) {
 			const cell = grid[x][y];
-			cell.id = id;
+			
+			if (DATA[id].reference) {
+				const base = DATA[cell.id].reference ? cell.reference : cell.id;
+				cell.id = id;
+				cell.reference = base;
+			} else {
+				cell.id = id;
+			}
 			cell.vel.mul(0);
 			cell.acts = 0;
+			this.updateCell(x, y);
+		}
+
+		static dereference(x, y) {
+			const cell = grid[x][y];
+			cell.id = cell.reference;
 			this.updateCell(x, y);
 		}
 
@@ -395,12 +416,16 @@
 			this.setCell(x, y, TYPES.AIR);
 		}
 
+		static isEmptyReference(x, y, set = Element.DEFAULT_PASS_THROUGH) {
+			return inBounds(x, y) && set.has(grid[x][y].id);
+		}
+
 		static isEmpty(x, y, set = Element.DEFAULT_PASS_THROUGH) {
 			if (inBounds(x, y)) {
 				let id = grid[x][y].id;
 				if (DATA[id].reference) {
 					if (set.has(id)) return true;
-					id = grid[x][y].acts;
+					id = grid[x][y].reference;
 				}
 				return set.has(id);
 			}
@@ -439,8 +464,8 @@
 			const t = grid[fx][fy];
 			grid[fx][fy] = grid[x][y];
 			grid[x][y] = t;
-			this.updateCell(x, y);
-			this.updateCell(fx, fy);
+			Element.updateCell(x, y);
+			Element.updateCell(fx, fy);
 		}
 
 		static isType(x, y, type) {
@@ -470,7 +495,7 @@
 			} catch (e) { alert(e) }
 		}
 
-		static tryMove(x, y, fx, fy, passthrough) {
+		static tryMove(x, y, fx, fy, passthrough, move = Element.move) {
 			const dx = fx - x;
 			const dy = fy - y;
 			const len = Math.sqrt(dx * dx + dy * dy);
@@ -483,7 +508,7 @@
 				const ny = Math.round(y + dy * t);
 				if (!this.isEmpty(nx, ny, passthrough)) {
 					if (lx !== x || ly !== y) {
-						this.move(x, y, lx, ly);
+						move(x, y, lx, ly);
 						return true;
 					} else return false;
 				}
@@ -492,7 +517,35 @@
 			}
 
 			if (this.isEmpty(fx, fy, passthrough)) {
-				this.move(x, y, fx, fy);
+				move(x, y, fx, fy);
+				return true;
+			}
+			return false;
+		}
+
+		static tryMoveReference(x, y, fx, fy, passthrough, move = Element.move) {
+			const dx = fx - x;
+			const dy = fy - y;
+			const len = Math.sqrt(dx * dx + dy * dy);
+			let moved = false;
+			let lx = x;
+			let ly = y;
+			for (let i = 1; i <= len; i++) {
+				const t = i / len;
+				const nx = Math.round(x + dx * t);
+				const ny = Math.round(y + dy * t);
+				if (!this.isEmptyReference(nx, ny, passthrough)) {
+					if (lx !== x || ly !== y) {
+						move(x, y, lx, ly);
+						return true;
+					} else return false;
+				}
+				lx = nx;
+				ly = ny;
+			}
+
+			if (this.isEmptyReference(fx, fy, passthrough)) {
+				move(x, y, fx, fy);
 				return true;
 			}
 			return false;
@@ -511,7 +564,8 @@
 	const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 	const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
 	const CONDUCTIVE = new Set([TYPES.COPPER, TYPES.STEEL, ...WATER_TYPES]);
-	
+	const ELECTRIFIED_ELEMENT_PASSTHROUGH = new Set([...CONDUCTIVE, TYPES.ELECTRIFIED_ELEMENT]);
+
 	const fluidUpdate = (x, y, direction, accel, passthrough) => {
 		const cell = grid[x][y];
 		const { vel } = cell;
@@ -527,11 +581,10 @@
 		} else {
 			if (vel.y > 5) {
 				vel.rotate(Random.angle()).div(2);
-				cell.acts = cell.id;
 				Element.setCellId(x, y, TYPES.PARTICLE);
 				return;
 			}
-			
+
 			const b = Random.bool() ? -1 : 1;
 			const disp = Random.range(0, DISPERSION);
 			for (let i = -1; i <= 1; i += 2) {
@@ -647,7 +700,8 @@
 		}
 	}
 
-	const EXPLOSION_PASSTHROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.LIGHTNING, TYPES.AIR, TYPES.PARTICLE]);
+	const EXPLOSION_PASSTHROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.LIGHTNING, TYPES.AIR]);
+	EXPLOSION_PASSTHROUGH.delete(TYPES.BLUE_FIRE);
 
 	function explodeLine(x, y, x1, y1, vel, passthrough) {
 		const dx = x1 - x;
@@ -663,18 +717,19 @@
 
 			if (!Element.isEmpty(ox, oy, passthrough)) {
 				const cell = grid[ox][oy];
-				const base = cell.id;
+				const base = DATA[cell.id].reference ? cell.reference : cell.id;
 
 				if (Random.bool(DATA[base].resistance))
 					break;
 
-				Element.setCell(ox, oy, TYPES.PARTICLE);
-				cell.acts = base;
+				cell.id = TYPES.PARTICLE;
+				cell.reference = base;
 				const CHAOS = 10 * vel;
 				cell.vel.set(
 					dx * t * vel + Random.range(-CHAOS, CHAOS),
 					dy * t * vel + Random.range(-CHAOS, CHAOS)
 				);
+				Element.updateCell(x, y);
 			}
 		}
 	}
@@ -709,7 +764,7 @@
 			const c = Math.cos(angle);
 			const s = Math.sin(angle);
 			[x, y] = [x * c - y * s, x * s + y * c];
-			
+
 			const S = 7;
 			let ix = Math.floor(x / S);
 			let iy = Math.floor(y / S);
@@ -720,7 +775,7 @@
 			iy = Math.floor(y / S);
 			if ((ix + iy % 2) % 2)
 				[gx, gy] = [gy, gx];
-			
+
 			const a = S / 2;
 			const b = S / 8;
 
@@ -1144,7 +1199,7 @@
 				const cos = Math.cos(angle);
 				const sin = Math.sin(angle);
 				if (!Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin), SALT_WATER_SWAP_PASSTHROUGH));
-					Element.updateCell(x, y);
+				Element.updateCell(x, y);
 			}
 		}, (x, y) => {
 			Element.trySetCell(x, y - 1, TYPES.STEAM);
@@ -1214,7 +1269,7 @@
 				Element.trySetCell(x - 1, y, TYPES.BEE);
 				Element.trySetCell(x + 1, y, TYPES.BEE);
 			}
-			
+
 			if (Random.bool(.001)) Element.trySetCell(x, y + 1, TYPES.HONEY);
 
 			if (
@@ -1270,86 +1325,147 @@
 			else
 				liquidUpdate(x, y);
 		}),
-		[TYPES.ELECTRIFIED_ELEMENT]: new Element(40, [
-			Color.CREAM
-		], 0, 0, (x, y) => {
-			let base = grid[x][y].acts;
-			neighborLoop: for (let i = -1; i <= 1; i += 2)
-				for (let j = -1; j <= 1; j += 2) {
-					const ox = x + i;
-					const oy = y + j;
-					if (inBounds(ox, oy) && CONDUCTIVE.has(grid[ox][oy].id)) {
-						if (Random.bool(0.25)) {
-							const base = grid[ox][oy].id;
-							Element.setCellId(ox, oy, TYPES.ELECTRIFIED_ELEMENT);
-							grid[ox][oy].acts = base;
-							break neighborLoop;
-						}
-					} else if (inBounds(ox, oy) && grid[ox][oy] !== TYPES.AIR) {
-						const { id } = grid[ox][oy];
-						if (CONDUCTIVE.has(id)) {
-							Element.setCellId(ox, oy, TYPES.ELECTRIFIED_ELEMENT);
-							grid[ox][oy].acts = id;
-						} else DATA[id].burn(ox, oy, TYPES.FIRE);
-					}
+		[TYPES.ELECTRIFIED_ELEMENT]: new Element(40, Color.CREAM, 0, 0, (x, y) => {
+			const cell = grid[x][y];
+
+			if (cell.acts === 0) {
+				
+				let canConduct = false;
+				Element.affectNeighbors(x, y, (x, y) => {
+					if (Element.isEmpty(x, y, CONDUCTIVE)) canConduct = true;
+					Element.tryBurn(x, y, TYPES.FIRE);
+				});
+
+				if (!canConduct)
+					return Element.die(x, y);
+					
+				if (!cell.vel.sqrMag) {
+					const angle = Random.angle();
+					const c = Math.cos(angle);
+					const s = Math.sin(angle);
+					cell.vel.x = c;
+					cell.vel.y = s;
 				}
-			// if (!water && 
-			if (Random.bool(0.5)) {
-				Element.setCellId(x, y, base);
-				grid[x][y].acts = 0;
+
+				const l = Random.range(4, 10);
+				let blocked = false;
+				let lx = x, ly = y;
+				const vel = cell.vel.get();
+				for (let i = 1; i < l; i++) {
+					const ox = x + Math.round(vel.x * i);
+					const oy = y + Math.round(vel.y * i);
+					if (ox === x && oy === y) continue;
+					
+					if (!Element.isEmptyReference(ox, oy, ELECTRIFIED_ELEMENT_PASSTHROUGH)) {
+						blocked = true;
+						break;
+					}
+					if (!Element.isType(ox, oy, TYPES.ELECTRIFIED_ELEMENT)) {
+						Element.setCellId(ox, oy, TYPES.ELECTRIFIED_ELEMENT);
+						grid[ox][oy].acts = 1;
+						grid[ox][oy].vel.mul(0);
+					}
+					lx = ox;
+					ly = oy;
+				}
+				
+				cell.acts = 1;
+
+				grid[lx][ly].acts = 0;
+				if (Random.bool(0.8)) grid[lx][ly].vel.mul(0);
+				else grid[lx][ly].vel.set(vel);
 			} else {
-				Element.updateCell(x, y);
-				DATA[base].update(x, y);
+				if (cell.acts++ > 10) {
+					Element.dereference(x, y);
+					grid[x][y].acts = 0;
+				}
 			}
+
+			Element.updateCell(x, y);
+
+			// if (Random.bool(0.1)) cell.vel.rotate(Random.range(-1, 1));
+			// if (!Element.tryMoveReference(x, y, x + Math.round(cell.vel.x), y + Math.round(cell.vel.y), CONDUCTIVE, (x, y, x1, y1) => {
+			// 	Element.dereference(x, y);
+			// 	Element.setCellId(x1, y1, TYPES.ELECTRIFIED_ELEMENT);
+			// 	grid[x1][y1].vel.set(cell.vel);
+			// })) cell.vel.mul(0);
+
+			// Element.updateCell(x, y);
+			// DATA[base].update(x, y);
+			// let base = grid[x][y].acts;
+			// neighborLoop: for (let i = -1; i <= 1; i += 2)
+			// 	for (let j = -1; j <= 1; j += 2) {
+			// 		const ox = x + i;
+			// 		const oy = y + j;
+			// 		if (inBounds(ox, oy) && CONDUCTIVE.has(grid[ox][oy].id)) {
+			// 			if (Random.bool(0.25)) {
+			// 				Element.setCellId(ox, oy, TYPES.ELECTRIFIED_ELEMENT);
+			// 				break neighborLoop;
+			// 			}
+			// 		} else if (inBounds(ox, oy) && grid[ox][oy] !== TYPES.AIR) {
+			// 			const { id } = grid[ox][oy];
+			// 			if (CONDUCTIVE.has(id)) {
+			// 				Element.setCellId(ox, oy, TYPES.ELECTRIFIED_ELEMENT);
+			// 			} else DATA[id].burn(ox, oy, TYPES.FIRE);
+			// 		}
+			// 	}
+			// // if (!water && 
+			// if (Random.bool(0.5)) {
+			// 	Element.setCellId(x, y, base);
+			// 	grid[x][y].acts = 0;
+			// } else {
+			// 	Element.updateCell(x, y);
+			// 	DATA[base].update(x, y);
+			// }
 		}, () => null, true),
 		[TYPES.PARTICLE]: new Element(1, (x, y) => {
-			return DATA[grid[x][y].acts].getColor(x, y);
+			return DATA[grid[x][y].reference].getColor(x, y);
 		}, 0, 0, (x, y) => {
 			try {
-			let base = grid[x][y].acts;
-			const { vel } = grid[x][y];
-			vel.y += GRAVITY;
+				let base = grid[x][y].reference;
+				const { vel } = grid[x][y];
+				vel.y += GRAVITY;
 
-			const fx = x + Math.round(vel.x);
-			const fy = y + Math.round(vel.y);
+				const fx = x + Math.round(vel.x);
+				const fy = y + Math.round(vel.y);
 
-			const dx = fx - x;
-			const dy = fy - y;
-			const len = Math.sqrt(dx * dx + dy * dy);
-			let moved = false;
-			let lx = x;
-			let ly = y;
-			for (let i = 1; i <= len; i++) {
-				const t = i / len;
-				const nx = Math.round(x + dx * t);
-				const ny = Math.round(y + dy * t);
-				
-				if (
-					!inBounds(nx, ny) ||
-					grid[nx][ny].id === base ||
-					!PARTICLE_PASSTHROUGH.has(grid[nx][ny].id)
-				) {
-					if (lx !== x || ly !== y) {
-						Element.move(x, y, lx, ly);
-						Element.setCell(lx, ly, base);
-						break;
-					} else {
-						Element.setCell(x, y, base);
-						break;
+				const dx = fx - x;
+				const dy = fy - y;
+				const len = Math.sqrt(dx * dx + dy * dy);
+				let moved = false;
+				let lx = x;
+				let ly = y;
+				for (let i = 1; i <= len; i++) {
+					const t = i / len;
+					const nx = Math.round(x + dx * t);
+					const ny = Math.round(y + dy * t);
+
+					if (
+						!inBounds(nx, ny) ||
+						grid[nx][ny].id === base ||
+						!PARTICLE_PASSTHROUGH.has(grid[nx][ny].id)
+					) {
+						if (lx !== x || ly !== y) {
+							Element.move(x, y, lx, ly);
+							Element.setCell(lx, ly, base);
+							break;
+						} else {
+							Element.setCell(x, y, base);
+							break;
+						}
 					}
+					lx = nx;
+					ly = ny;
 				}
-				lx = nx;
-				ly = ny;
-			}
 
-			if (
-				inBounds(fx, fy) &&
-				grid[fx][fy].id !== base &&
-				PARTICLE_PASSTHROUGH.has(grid[fx][fy].id)
-			) Element.move(x, y, fx, fy);
-		} catch (err) {
-			alert(err.stack);
-		}
+				if (
+					inBounds(fx, fy) &&
+					grid[fx][fy].id !== base &&
+					PARTICLE_PASSTHROUGH.has(grid[fx][fy].id)
+				) Element.move(x, y, fx, fy);
+			} catch (err) {
+				alert(err.stack);
+			}
 
 		}, () => null, true),
 		[TYPES.BRICK]: new Element(1, (x, y) => {
@@ -1412,7 +1528,7 @@
 							if (id !== TYPES.AIR && id !== TYPES.LIGHTNING) {
 								if (CONDUCTIVE.has(id)) {
 									Element.setCellId(ox, oy, TYPES.ELECTRIFIED_ELEMENT);
-									grid[ox][oy].acts = id;
+									grid[ox][oy].vel.mul(0);
 								} else {
 									const data = DATA[id];
 									data.burn(ox, oy, TYPES.FIRE, true);
@@ -1533,132 +1649,93 @@
 	}
 
 	intervals.continuous(time => {
-		for (const key of keyboard.downQueue) {
-			if (key === "ArrowRight") nextBrush();
-			else if (key === "ArrowLeft") lastBrush();
-			else if (key === "ArrowUp") brushSize++;
-			else if (key === "ArrowDown") brushSize = Math.max(brushSize - 1, 1);
-		}
+		try {
+			for (const key of keyboard.downQueue) {
+				if (key === "ArrowRight") nextBrush();
+				else if (key === "ArrowLeft") lastBrush();
+				else if (key === "ArrowUp") brushSize++;
+				else if (key === "ArrowDown") brushSize = Math.max(brushSize - 1, 1);
+			}
 
-		if (keyboard.justPressed("p")) paused = !paused;
-		const SELECTORS_SHOWN = keyboard.pressed("s");
+			if (keyboard.justPressed("p")) paused = !paused;
+			const SELECTORS_SHOWN = keyboard.pressed("s");
 
-		if (mouse.wheelDelta > 0) lastBrush();
-		if (mouse.wheelDelta < 0) nextBrush();
+			if (mouse.wheelDelta > 0) lastBrush();
+			if (mouse.wheelDelta < 0) nextBrush();
 
-		for (const touch of touches.allPressed) {
-			const r = brushSize;
-			const { screen } = touches.get(touch);
+			for (const touch of touches.allPressed) {
+				const r = brushSize;
+				const { screen } = touches.get(touch);
 
-			if (SELECTORS_SHOWN && screen.y < TYPE_SELECTOR.SIZE) continue;
+				if (SELECTORS_SHOWN && screen.y < TYPE_SELECTOR.SIZE) continue;
 
-			const { x: ox, y: oy } = Vector2.floor(screen.over(CELL));
+				const { x: ox, y: oy } = Vector2.floor(screen.over(CELL));
 
-			if (brush === TYPES.PARTICLE)
-				explode(ox, oy, r);
-			else for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
-				if (i * i + j * j < r * r) {
-					const x = i + ox;
-					const y = j + oy;
-					if (inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
-						Element.setCell(x, y, brush);
+				if (brush === TYPES.PARTICLE)
+					explode(ox, oy, r);
+				else for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
+					if (i * i + j * j < r * r) {
+						const x = i + ox;
+						const y = j + oy;
+						if (inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
+							Element.setCell(x, y, brush);
+					}
 				}
 			}
-		}
 
-		const neg_x = !!(time % 2);
-		const neg_y = !!((time >> 1) % 2);
+			const neg_x = !!(time % 2);
+			const neg_y = !!((time >> 1) % 2);
 
-		for (let i = 0; i < WIDTH; i++) for (let j = 0; j < HEIGHT; j++)
-			grid[i][j].updated = false;
+			for (let i = 0; i < WIDTH; i++) for (let j = 0; j < HEIGHT; j++)
+				grid[i][j].updated = false;
 
-		const cells = Array.dim(CHUNK * CHUNK).map((_, i) => i);
-
-		for (let i = 0; i < cells.length; i++) {
-			const inx0 = i;
-			const inx1 = Random.int(0, cells.length - 1);
-			const t = cells[inx0];
-			cells[inx0] = cells[inx1];
-			cells[inx1] = t;
-		}
-
-		function processChunk(chunk) {
-			const cx = chunk.x * CHUNK;
-			const cy = chunk.y * CHUNK;
+			const cells = Array.dim(CHUNK * CHUNK).map((_, i) => i);
 
 			for (let i = 0; i < cells.length; i++) {
-				const coord = cells[i];
-				const x = cx + ~~(coord / CHUNK);
-				const y = cy + coord % CHUNK;
-				if (x >= WIDTH || y >= HEIGHT)
-					continue;
-				const cell = grid[x][y];
-				if (!cell.updated) {
-					DATA[cell.id].update(x, y);
-					cell.updated = true;
+				const inx0 = i;
+				const inx1 = Random.int(0, cells.length - 1);
+				const t = cells[inx0];
+				cells[inx0] = cells[inx1];
+				cells[inx1] = t;
+			}
+
+			function processChunk(chunk) {
+				const cx = chunk.x * CHUNK;
+				const cy = chunk.y * CHUNK;
+
+				for (let i = 0; i < cells.length; i++) {
+					const coord = cells[i];
+					const x = cx + ~~(coord / CHUNK);
+					const y = cy + coord % CHUNK;
+					if (x >= WIDTH || y >= HEIGHT)
+						continue;
+					const cell = grid[x][y];
+					if (!cell.updated) {
+						DATA[cell.id].update(x, y);
+						cell.updated = true;
+					}
 				}
 			}
-		}
 
-		if (!paused) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
-			const cx = neg_x ? CHUNK_WIDTH - 1 - i : i;
-			const cy = neg_y ? CHUNK_HEIGHT - 1 - j : j;
-			const chunk = chunks[cx][cy];
-			if (chunk.sleep) continue;
+			if (!paused) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+				const cx = neg_x ? CHUNK_WIDTH - 1 - i : i;
+				const cy = neg_y ? CHUNK_HEIGHT - 1 - j : j;
+				const chunk = chunks[cx][cy];
+				if (chunk.sleep) continue;
 
-			processChunk(chunk);
+				processChunk(chunk);
 
-			while (Element.toWake.length)
-				processChunk(Element.toWake.pop());
+				while (Element.toWake.length)
+					processChunk(Element.toWake.pop());
 
-		}
-
-
-		for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
-			const chunk = chunks[i][j];
-
-			if (chunk.sleep && chunk.sleepNext)
-				continue;
-			const cx = chunk.x * CHUNK;
-			const cy = chunk.y * CHUNK;
-			for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
-				const x = cx + i;
-				const y = cy + j;
-				if (x >= WIDTH || y >= HEIGHT)
-					continue;
-				const cell = grid[x][y];
-				if (cell.id != lastIds[x][y]) {
-					tex.setPixel(x, y, DATA[cell.id].getColor(x, y));
-				}
 			}
-		}
-		
-		for (let i = 0; i < WIDTH; i++) for (let j = 0; j < HEIGHT; j++)
-			lastIds[i][j] = grid[i][j].id;
-
-		renderer.fill(Color.BLACK);
-		if (RTX) {
-			const image = rays({
-				direction: new Vector2(-1, 1),
-				color: new Color(105, 105, 50),
-				ambient: new Color(200, 200, 200)
-			});
-			renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
-		} else {
-			renderer.image(tex).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
-		}
 
 
-		if (keyboard.pressed("v")) {
-			if (!debugFrame)
-				debugFrame = new FastFrame(width, height);
-			
 			for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
 				const chunk = chunks[i][j];
 
 				if (chunk.sleep && chunk.sleepNext)
 					continue;
-
 				const cx = chunk.x * CHUNK;
 				const cy = chunk.y * CHUNK;
 				for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
@@ -1667,27 +1744,69 @@
 					if (x >= WIDTH || y >= HEIGHT)
 						continue;
 					const cell = grid[x][y];
-					if (cell.vel.sqrMag) {
-						debugFrame.renderer.stroke(Color.RED).arrow(x * CELL, y * CELL, x * CELL + cell.vel.x * CELL, y * CELL + cell.vel.y * CELL);
-					}
+					if (cell.id != lastIds[x][y])
+						tex.setPixel(x, y, DATA[cell.id].getColor(x, y));
 				}
-				
-				debugFrame.renderer.stroke(Color.RED).rect(i * CHUNK * CELL, j * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
 			}
-			renderer.image(debugFrame).default(0, 0);
-			debugFrame.renderer.clear();
-		}
 
-		if (!paused) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
-			const chunk = chunks[i][j];
+			for (let i = 0; i < WIDTH; i++) for (let j = 0; j < HEIGHT; j++)
+				lastIds[i][j] = grid[i][j].id;
 
-			chunk.sleep = chunk.sleepNext;
-			chunk.sleepNext = true;
-		}
+			renderer.fill(Color.BLACK);
+			if (RTX) {
+				const image = rays({
+					direction: new Vector2(-1, 1),
+					color: new Color(105, 105, 50),
+					ambient: new Color(200, 200, 200)
+				});
+				renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
+			} else {
+				renderer.image(tex).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
+			}
 
-		if (!SELECTORS_SHOWN) {
-			renderer.textMode = TextMode.TOP_LEFT;
-			renderer.draw(Color.WHITE).text(Font.Arial20, `brush: ${typeName(brush)}, brushSize: ${brushSize}, paused: ${paused}, fps: ${intervals.fps}`, 10, 10);
+
+			if (keyboard.pressed("v")) {
+				if (!debugFrame)
+					debugFrame = new FastFrame(width, height);
+
+				for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+					const chunk = chunks[i][j];
+
+					if (chunk.sleep && chunk.sleepNext)
+						continue;
+
+					const cx = chunk.x * CHUNK;
+					const cy = chunk.y * CHUNK;
+					for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
+						const x = cx + i;
+						const y = cy + j;
+						if (x >= WIDTH || y >= HEIGHT)
+							continue;
+						const cell = grid[x][y];
+						if (cell.vel.sqrMag) {
+							debugFrame.renderer.stroke(Color.RED).arrow(x * CELL, y * CELL, x * CELL + cell.vel.x * CELL, y * CELL + cell.vel.y * CELL);
+						}
+					}
+
+					debugFrame.renderer.stroke(Color.RED).rect(i * CHUNK * CELL, j * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
+				}
+				renderer.image(debugFrame).default(0, 0);
+				debugFrame.renderer.clear();
+			}
+
+			if (!paused) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+				const chunk = chunks[i][j];
+
+				chunk.sleep = chunk.sleepNext;
+				chunk.sleepNext = true;
+			}
+
+			if (!SELECTORS_SHOWN) {
+				renderer.textMode = TextMode.TOP_LEFT;
+				renderer.draw(Color.WHITE).text(Font.Arial20, `brush: ${typeName(brush)}, brushSize: ${brushSize}, paused: ${paused}, fps: ${intervals.fps}`, 10, 10);
+			}
+		} catch (err) {
+			alert(err.stack);
 		}
 	}, IntervalFunction.UPDATE);
 </script>

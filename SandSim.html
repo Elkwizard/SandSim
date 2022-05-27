@@ -155,7 +155,7 @@
 	};
 
 	const TYPES = Object.fromEntries([
-		"AIR", "DDT", "STEEL", "WATER", "MARBLE", "CONDENSED_STONE", "LAVA", "LIGHTNING", "BRICK", "CLAY", "PARTICLE", "BEE", "HIVE", "HONEY", "SUGAR", "SALT", "SALT_WATER", "GRASS", "SOIL", "DAMP_SOIL", "ROOT", "KELP_TOP", "COPPER", "PNEUMATOCYST", "SAND", "KELP", "WOOD", "STEAM", "SMOKE", "STONE", "COAL", "WAX", "GRAINY_WAX", "MOLTEN_WAX", "FIRE", "ICE", "HYDROGEN", "FLOWER", "ACID", "POWER_LAVA", "GLASS", "OIL", "FUSE", "BLUE_FIRE", "ELECTRICITY", "LIGHT",
+		"AIR", "DDT", "STEEL", "ESTIUM", "ESTIUM_GAS", "WATER", "MARBLE", "CONDENSED_STONE", "LAVA", "LIGHTNING", "BRICK", "CLAY", "PARTICLE", "BEE", "HIVE", "HONEY", "SUGAR", "SALT", "SALT_WATER", "GRASS", "SOIL", "DAMP_SOIL", "ROOT", "KELP_TOP", "COPPER", "PNEUMATOCYST", "SAND", "KELP", "WOOD", "STEAM", "SMOKE", "STONE", "COAL", "WAX", "GRAINY_WAX", "MOLTEN_WAX", "FIRE", "ICE", "HYDROGEN", "FLOWER", "ACID", "POWER_LAVA", "GLASS", "OIL", "FUSE", "BLUE_FIRE", "ELECTRICITY", "LIGHT",
 		// "GOLD", "LIQUID_GOLD",
 		// "SILVER", "LIQUID_SILVER",
 		"LIQUID_COPPER",
@@ -556,15 +556,17 @@
 	const DISPERSION = 4;
 
 	const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE, TYPES.PARTICLE]);
-	const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, TYPES.STEAM, TYPES.SMOKE, TYPES.HYDROGEN, TYPES.DDT]);
-	const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL]);
+	const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT]);
+	const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL, TYPES.ESTIUM]);
 	const SALT_WATER_SWAP_PASSTHROUGH = new Set([TYPES.WATER]);
-	const SOLID_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.WATER, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_SILVER, TYPES.LIQUID_GOLD, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_MAX, TYPES.SALT_WATER]);
+	const SOLID_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.WATER, TYPES.ESTIUM, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_SILVER, TYPES.LIQUID_GOLD, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_MAX, TYPES.SALT_WATER]);
 	const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASS_THROUGH, TYPES.AIR, TYPES.PARTICLE]);
 	const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 	const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
-	const CONDUCTIVE = new Set([TYPES.COPPER, TYPES.LIQUID_COPPER, TYPES.STEEL, ...WATER_TYPES]);
+	const CONDUCTIVE = new Set([TYPES.COPPER, TYPES.LIQUID_COPPER, TYPES.ESTIUM_GAS, TYPES.STEEL, ...WATER_TYPES]);
 	const ELECTRICITY_PASSTHROUGH = new Set([...CONDUCTIVE, TYPES.ELECTRICITY]);
+	const SUGARY = new Set([TYPES.SUGAR, TYPES.HONEY]);
+	const COLD = new Set([...WATER_TYPES, TYPES.ICE]);
 
 	const fluidUpdate = (x, y, direction, accel, passthrough) => {
 		const cell = grid[x][y];
@@ -974,6 +976,24 @@
 			Element.trySetCell(x, y - 1, Random.bool(.4) ? TYPES.SMOKE : TYPES.STEAM);
 		}),
 
+		[TYPES.ESTIUM]: new Element(4, [new Color("#993150")], .6, .08, (x, y) => {
+			liquidUpdate(x, y);
+			if(Random.bool(.0001) && Element.isType(x, y - 1, TYPES.AIR)) Element.setCell(x, y, TYPES.ESTIUM_GAS);
+			
+			Element.consumeReactMany(x, y, SUGARY, TYPES.COPPER);
+			Element.consumeReact(x, y, TYPES.OIL, TYPES.FUSE);
+			if(Random.bool()) Element.consumeReactMany(x, y, WATER_TYPES, TYPES.SALT)
+			else Element.consumeReactMany(x, y, WATER_TYPES, TYPES.ESTIUM_GAS)
+		}, (x, y) => {
+			Element.trySetCell(x, y - 1, TYPES.ESTIUM_GAS);
+		}),
+
+		[TYPES.ESTIUM_GAS]: new Element(4, [new Color("#d498a8")], .6, .09, (x, y) => {
+			gasUpdate(x, y);
+		}, (x, y) => {
+			if(Random.bool(.05) && inBounds(x, y + 1)) Element.setCell(x, y + 1, TYPES.SALT);
+		}),
+
 		[TYPES.PNEUMATOCYST]: new Element(70, [new Color("#bff55b")], 0, .04, (x, y) => {
 
 		}, (x, y) => {
@@ -996,7 +1016,7 @@
 		}),*/
 		[TYPES.LIQUID_COPPER]: new Element(20, [new Color("#a35a33"), new Color("#8c4c24")], 0, 0, (x, y) => {
 			liquidUpdate(x, y);
-			Element.consumeReactMany(x, y, WATER_TYPES, TYPES.COPPER);
+			Element.consumeReactMany(x, y, COLD, TYPES.COPPER);
 			lavaUpdate(x, y, TYPES.FIRE);
 		}),
 		[TYPES.COPPER]: new Element(10, (x, y) => {
@@ -1008,7 +1028,7 @@
 			else if (t > .04) return new Color("#823d1e05");
 			else return new Color("#d4683505");
 		}, 0.4, 0.05, solidUpdate, (x, y) => {
-			if (Random.bool(.0005)) Element.setCell(x, y, TYPES.LIQUID_COPPER);
+			if (Random.bool(.01)) Element.setCell(x, y, TYPES.LIQUID_COPPER);
 			return true;
 		}),
 		[TYPES.OIL]: new Element(1, new Color("#123456"), 0.1, 0.2, liquidUpdate, (x, y) => {
@@ -1628,8 +1648,13 @@
 		}
 	}
 
-	for (let i = 0; i < ELEMENT_COUNT; i++) {
-		TYPE_SELECTOR.create(i, TYPE_SELECTOR.SIZE * i, 0);
+	let eTS = 0
+	for(let y = 0; y < Math.ceil(ELEMENT_COUNT / Math.floor(window.width / TYPE_SELECTOR.SIZE)); y++){
+		for(let x = 0; x < Math.floor(window.width / TYPE_SELECTOR.SIZE); x++){
+			if(eTS >= ELEMENT_COUNT) break;
+			TYPE_SELECTOR.create(eTS, TYPE_SELECTOR.SIZE * x, TYPE_SELECTOR.SIZE * y);
+			eTS++;
+		}
 	}
 
 	if (false) {
@@ -1690,6 +1715,7 @@
 
 			if (keyboard.justPressed(" ")) paused = !paused;
 			const SELECTORS_SHOWN = keyboard.pressed("s");
+			const SETTINGS_SHOWN = keyboard.pressed("Escape")
 
 			let hovered;
 			{

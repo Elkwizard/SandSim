@@ -155,7 +155,7 @@
 	};
 
 	const TYPES = Object.fromEntries([
-		"AIR", "DDT", "STEEL", "WATER", "MARBLE", "CONDENSED_STONE", "LAVA", "LIGHTNING", "BRICK", "CLAY", "PARTICLE", "BEE", "HIVE", "HONEY", "SUGAR", "SALT", "SALT_WATER", "GRASS", "SOIL", "DAMP_SOIL", "ROOT", "KELP_TOP", "COPPER", "PNEUMATOCYST", "SAND", "KELP", "WOOD", "STEAM", "SMOKE", "STONE", "COAL", "WAX", "GRAINY_WAX", "MOLTEN_WAX", "FIRE", "ICE", "HYDROGEN", "FLOWER", "ACID", "POWER_LAVA", "GLASS", "OIL", "FUSE", "BLUE_FIRE", "ELECTRICITY", "LIGHT",
+		"AIR", "DDT", "STEEL", "WATER", "MARBLE", "CONDENSED_STONE", "LAVA", "LIGHTNING", "BRICK", "CLAY", "PARTICLE", "BEE", "HIVE", "HONEY", "SUGAR", "SALT", "SALT_WATER", "GRASS", "SOIL", "DAMP_SOIL", "ROOT", "KELP_TOP", "COPPER", "PNEUMATOCYST", "SAND", "KELP", "WOOD", "STEAM", "SMOKE", "STONE", "COAL", "WAX", "GRAINY_WAX", "MOLTEN_WAX", "FIRE", "ICE", "HYDROGEN", "FLOWER", "ACID", "POWER_LAVA", "GLASS", "OIL", "FUSE", "BLUE_FIRE", "BATTERY", "ELECTRICITY", "LIGHT",
 		// "GOLD", "LIQUID_GOLD",
 		// "SILVER", "LIQUID_SILVER",
 		"LIQUID_COPPER",
@@ -210,7 +210,11 @@
 		static DEFAULT_PASS_THROUGH = new Set([TYPES.AIR]);
 		constructor(alpha, color, resistance = 0, flammability = 0, update = () => null, onburn = () => null, reference = false) {
 			this.color = color;
-			this.resistance = resistance;
+			
+			if (typeof resistance === "function")
+				this.getResistance = resistance;
+			else this.resistance = resistance;
+
 			this.flammability = flammability;
 			this.onburn = onburn;
 
@@ -227,6 +231,10 @@
 			}
 			this.update = update;
 			this.reference = reference;
+		}
+
+		getResistance(x, y) {
+			return this.resistance;
 		}
 
 		getColor(x, y) {
@@ -320,7 +328,7 @@
 			for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
 				const ox = x + i;
 				const oy = y + j;
-				if (inBounds(ox, oy))
+				if ((i || j) && inBounds(ox, oy))
 					effect(ox, oy);
 			}
 		}
@@ -329,7 +337,7 @@
 			for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
 				const ox = x + i;
 				const oy = y + j;
-				if (inBounds(ox, oy) && grid[ox][oy].id !== TYPES.AIR)
+				if ((i || j) && inBounds(ox, oy) && grid[ox][oy].id !== TYPES.AIR)
 					effect(ox, oy);
 			}
 		}
@@ -372,7 +380,7 @@
 			if (DATA[id].reference) {
 				const base = DATA[cell.id].reference ? cell.reference : cell.id;
 				cell.id = id;
-				cell.reference = base;
+				cell.reference = base === id ? 0 : base;
 			} else {
 				cell.id = id;
 			}
@@ -717,9 +725,9 @@
 
 			if (!Element.isEmpty(ox, oy, passthrough)) {
 				const cell = grid[ox][oy];
-				const base = DATA[cell.id].reference ? cell.reference : cell.id;
+				const base = cell.id === TYPES.PARTICLE ? cell.reference : cell.id;
 
-				if (Random.bool(DATA[base].resistance))
+				if (Random.bool(DATA[base].getResistance(ox, oy)))
 					break;
 
 				cell.id = TYPES.PARTICLE;
@@ -811,7 +819,11 @@
 
 			return Color.alpha(new Color(color), Color.EPSILON);
 		}, 0.9),
-
+		[TYPES.BATTERY]: new Element(1, (x, y) => {
+			return Color.alpha(x % 2 && y % 2 ? Color.RED : Color.DARK_GRAY, Color.EPSILON);
+		}, 0.8, 0, (x, y) => {
+			Element.reactMany(x, y, CONDUCTIVE, TYPES.ELECTRICITY);
+		}),
 		[TYPES.STONE]: new Element(1, [Color.GRAY, Color.colorScale(Color.GRAY, 0.95)], 0.8),
 
 		[TYPES.CONDENSED_STONE]: new Element(1, freqColoring([
@@ -1346,7 +1358,9 @@
 			else
 				liquidUpdate(x, y);
 		}),
-		[TYPES.ELECTRICITY]: new Element(40, Color.CREAM, 0, 0, (x, y) => {
+		[TYPES.ELECTRICITY]: new Element(40, Color.CREAM, (x, y) => {
+			return DATA[grid[x][y].reference].getResistance(x, y);
+		}, 0, (x, y) => {
 			const cell = grid[x][y];
 
 			if (cell.acts === 0) {

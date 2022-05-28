@@ -1385,7 +1385,7 @@
 
 			if (cell.acts === 0) {
 
-				let canConduct = false;
+				let canConduct = CONDUCTIVE.has(cell.reference);
 				Element.affectNeighbors(x, y, (x, y) => {
 					if (Element.isEmpty(x, y, CONDUCTIVE)) canConduct = true;
 					Element.tryBurn(x, y, TYPES.FIRE);
@@ -1710,16 +1710,6 @@
 
 	intervals.continuous(time => {
 		try {
-
-			if (keyboard.pressed("Control")) {
-				if (mouse.pressed("Left"))
-					scene.camera.position.add(mouse.worldLast.minus(mouse.world));
-				if (mouse.wheelDelta > 0)
-					scene.camera.zoomOut(0.2);
-				else if (mouse.wheelDelta < 0)
-					scene.camera.zoomIn(0.2);
-			}
-
 			for (const key of keyboard.downQueue) {
 				if (key === "ArrowRight") nextBrush();
 				else if (key === "ArrowLeft") lastBrush();
@@ -1737,27 +1727,34 @@
 				hovered = inBounds(coord.x, coord.y) ? grid[coord.x][coord.y].id : TYPES.AIR;
 			};
 
-			if (mouse.wheelDelta > 0) lastBrush();
-			if (mouse.wheelDelta < 0) nextBrush();
+			if (keyboard.pressed("Control")) {
+				if (mouse.pressed("Left"))
+					scene.camera.position.add(mouse.worldLast.minus(mouse.world));
+				if (mouse.wheelDelta > 0)
+					scene.camera.zoomOut(0.2);
+				else if (mouse.wheelDelta < 0)
+					scene.camera.zoomIn(0.2);
+			} else {
+				if (mouse.wheelDelta > 0) lastBrush();
+				if (mouse.wheelDelta < 0) nextBrush();
 
-			if (keyboard.released("Control")) for (const touch of touches.allPressed) {
-				const r = brushSize;
-				const { world } = touches.get(touch);
+				for (const touch of touches.allPressed) {
+					const r = brushSize;
+					const { screen, world } = touches.get(touch);
 
-				if (SELECTORS_SHOWN && world.y < TYPE_SELECTOR.SIZE) continue;
+					if (SELECTORS_SHOWN && screen.y < TYPE_SELECTOR.SIZE) continue;
 
-				const { x: ox, y: oy } = Vector2.floor(world.over(CELL));
+					const { x: ox, y: oy } = Vector2.floor(world.over(CELL));
 
-
-
-				if (brush === TYPES.PARTICLE)
-					explode(ox, oy, r);
-				else for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
-					if (i * i + j * j < r * r) {
-						const x = i + ox;
-						const y = j + oy;
-						if (inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
-							Element.setCell(x, y, brush);
+					if (brush === TYPES.PARTICLE)
+						explode(ox, oy, r);
+					else for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
+						if (i * i + j * j < r * r) {
+							const x = i + ox;
+							const y = j + oy;
+							if (inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
+								Element.setCell(x, y, brush);
+						}
 					}
 				}
 			}

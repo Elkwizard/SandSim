@@ -1078,7 +1078,7 @@
 			Element.trySetCell(x, y - 1, Random.bool(.4) ? TYPES.SMOKE : TYPES.STEAM);
 		}),
 
-		[TYPES.ESTIUM]: new Element(4, [new Color("#993150")], .6, .08, (x, y) => {
+		[TYPES.ESTIUM]: new Element(4, new Color("#993150"), .6, .08, (x, y) => {
 			liquidUpdate(x, y);
 			if(Random.bool(.0001) && Element.isType(x, y - 1, TYPES.AIR)) Element.setCell(x, y, TYPES.ESTIUM_GAS);
 			
@@ -1234,7 +1234,7 @@
 			Element.consumeReact(x, y, TYPES.WATER, TYPES.DAMP_SOIL);
 		}),
 
-		[TYPES.ROOT]: new Element(1, [new Color("#bfb19b")], 0.3, .02, (x, y) => {
+		[TYPES.ROOT]: new Element(1, [new Color("#bfb19b"), new Color("#baac99"), new Color("#d6c09f")], 0.3, .02, (x, y) => {
 			if(grid[x][y].acts != 1){
 				let ox = x;
 				
@@ -1311,7 +1311,12 @@
 			return true;
 		}),
 
-		[TYPES.GRASS]: new Element(1, [new Color("#53f581"), new Color("#33d44e")], 0.05, .03, (x, y) => {
+		[TYPES.GRASS]: new Element(1, freqColoring([
+			["#53f581", 30], 
+			["#33d44e", 30],
+			["#42e35d", 30],
+			["#3fbf55 ", 1]
+		]), 0.05, .03, (x, y) => {
 			let shift = Random.bool(.9) ? 0 : Math.floor(Math.random() * 3) - 1;
 
 			if (Element.isType(x + shift, y - 1, TYPES.AIR) && inBounds(x + shift, y - 1)) {
@@ -1370,7 +1375,7 @@
 		[TYPES.WATER]: new Element(0, [new Color("#120a59"), new Color("#140960")], 0.6, 0.05, (x, y) => {
 			fluidUpdate(x, y, 1, GRAVITY, WATER_PASS_THROUGH);
 		}, (x, y) => {
-			Element.trySetCell(x, y - 1, TYPES.STEAM);
+			Element.setCell(x, y, TYPES.STEAM);
 			return true;
 		}),
 		[TYPES.SALT_WATER]: new Element(0, freqColoring([
@@ -1386,8 +1391,8 @@
 				Element.updateCell(x, y);
 			}
 		}, (x, y) => {
-			Element.trySetCell(x, y - 1, TYPES.STEAM);
-			Element.setCell(x, y, TYPES.SALT);
+			Element.setCell(x, y, TYPES.STEAM);
+			Element.trySetCell(x, y - 1, TYPES.SALT);
 			return true;
 		}),
 		[TYPES.POWER_LAVA]: new Element(100, [Color.CYAN, Color.BLUE, Color.SKY_BLUE], 0.6, 0, (x, y) => {

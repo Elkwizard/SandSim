@@ -1184,7 +1184,7 @@
 		}, 0, 0.3, (x, y) => {
 			if((Random.bool(Random.perlin2D(x, y, .03)) / 10)) Element.react(x, y, TYPES.AIR, TYPES.BAHHUM);
 			else if (Random.bool(.01)) Element.react(x, y, TYPES.AIR, TYPES.BAHHUM);
-			else if(Element.isType(x, y - 1, TYPES.AIR) || Element.isType(x, y + 1, TYPES.AIR) || Element.isType(x - 1, yf, TYPES.AIR) || Element.isType(x + 1, y, TYPES.AIR)) Element.updateCell(x, y);
+			else if(Element.isType(x, y - 1, TYPES.AIR) || Element.isType(x, y + 1, TYPES.AIR) || Element.isType(x - 1, y, TYPES.AIR) || Element.isType(x + 1, y, TYPES.AIR)) Element.updateCell(x, y);
 
 			Element.consumeReact(x, y, TYPES.DDT, TYPES.LIGHTNING)
 		}),

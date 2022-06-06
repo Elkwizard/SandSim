@@ -155,7 +155,7 @@
 	};
 
 	const TYPES = Object.fromEntries([
-		"AIR", "DDT", "STEEL", "ESTIUM", "ESTIUM_GAS", "WATER", "MARBLE", "CONDENSED_STONE", "LAVA", "LIGHTNING", "BRICK", "CLAY", "PARTICLE", "BEE", "HIVE", "HONEY", "SUGAR", "SALT", "SALT_WATER", "GRASS", "SOIL", "DAMP_SOIL", "ROOT", "KELP_TOP", "COPPER", "PNEUMATOCYST", "SAND", "KELP", "WOOD", "STEAM", "SMOKE", "STONE", "COAL", "WAX", "GRAINY_WAX", "MOLTEN_WAX", "FIRE", "ICE", "HYDROGEN", "FLOWER", "ACID", "POWER_LAVA", "GLASS", "OIL", "FUSE", "BLUE_FIRE", "BATTERY", "ELECTRICITY", "LIGHT",
+		"AIR", "BRICK", "DDT", "STEEL", "ESTIUM", "ESTIUM_GAS", "WATER", "MARBLE", "CONDENSED_STONE", "LAVA", "LIGHTNING", "CLAY", "PARTICLE", "BEE", "HIVE", "HONEY", "SUGAR", "SALT", "SALT_WATER", "GRASS", "SOIL", "DAMP_SOIL", "ROOT", "KELP_TOP", "COPPER", "PNEUMATOCYST", "SAND", "KELP", "WOOD", "STEAM", "SMOKE", "STONE", "COAL", "WAX", "GRAINY_WAX", "MOLTEN_WAX", "FIRE", "ICE", "HYDROGEN", "FLOWER", "ACID", "POWER_LAVA", "GLASS", "OIL", "FUSE", "BLUE_FIRE", "BATTERY", "ELECTRICITY", "LIGHT",
 		// "GOLD", "LIQUID_GOLD",
 		// "SILVER", "LIQUID_SILVER",
 		"LIQUID_COPPER",
@@ -210,7 +210,7 @@
 		static DEFAULT_PASS_THROUGH = new Set([TYPES.AIR]);
 		constructor(alpha, color, resistance = 0, flammability = 0, update = () => null, onburn = () => null, reference = false) {
 			this.color = color;
-			
+
 			if (typeof resistance === "function")
 				this.getResistance = resistance;
 			else this.resistance = resistance;
@@ -990,11 +990,11 @@
 
 		[TYPES.ESTIUM]: new Element(4, [new Color("#993150")], .6, .08, (x, y) => {
 			liquidUpdate(x, y);
-			if(Random.bool(.0001) && Element.isType(x, y - 1, TYPES.AIR)) Element.setCell(x, y, TYPES.ESTIUM_GAS);
-			
+			if (Random.bool(.0001) && Element.isType(x, y - 1, TYPES.AIR)) Element.setCell(x, y, TYPES.ESTIUM_GAS);
+
 			Element.consumeReactMany(x, y, SUGARY, TYPES.COPPER);
 			Element.consumeReact(x, y, TYPES.OIL, TYPES.FUSE);
-			if(Random.bool()) Element.consumeReactMany(x, y, WATER_TYPES, TYPES.SALT)
+			if (Random.bool()) Element.consumeReactMany(x, y, WATER_TYPES, TYPES.SALT)
 			else Element.consumeReactMany(x, y, WATER_TYPES, TYPES.ESTIUM_GAS)
 		}, (x, y) => {
 			Element.trySetCell(x, y - 1, TYPES.ESTIUM_GAS);
@@ -1003,7 +1003,7 @@
 		[TYPES.ESTIUM_GAS]: new Element(4, [new Color("#d498a8")], .6, .09, (x, y) => {
 			gasUpdate(x, y);
 		}, (x, y) => {
-			if(Random.bool(.05) && inBounds(x, y + 1)) Element.setCell(x, y + 1, TYPES.SALT);
+			if (Random.bool(.05) && inBounds(x, y + 1)) Element.setCell(x, y + 1, TYPES.SALT);
 		}),
 
 		[TYPES.PNEUMATOCYST]: new Element(70, [new Color("#bff55b")], 0, .04, (x, y) => {
@@ -1309,15 +1309,55 @@
 			return true;
 		}),
 
-		[TYPES.HIVE]: new Element(1, [new Color("#d9b85d01"), new Color("#de9e1d01")]
-			//et p = Math.round(Random.voronoi2D(x, y, .1) * 7)/7;
+		[TYPES.HIVE]: new Element(1, (x, y) => {
+			const CELL = 6;
+			
+			const getHex = uv => {
+				uv = uv.get();
+				const factor = 1.15;
+				uv.y *= factor;
+				
+				let gid = Vector2.floor(uv.over(CELL));
+				const even = gid.y % 2 === 0;
+				if (even) uv.x += CELL * 0.5;
+				gid = Vector2.floor(uv.over(CELL));
+				let guv = uv.over(CELL).minus(gid);
 
-			//if(p < .0) return new Color("#d9b85d01")
-			//else return new Color("#de9e1d01")
-			//return Color.lerp(new Color("#d9b85d01"), new Color("#855a0501"), p)
+				const o = guv.get();
 
-			//	"#de9e1d01")else return new Color("#d9b85d01")
-			, 0.3, 0.02, (x, y) => {
+				guv = Vector2.abs(guv.minus(0.5)).plus(0.5);
+
+				const slope = Math.tan(3.1415926 / 6.0) * factor;
+
+				const y = slope * (guv.x - 0.5);
+				
+				const y2 = y - 0.25 * slope;
+				
+				if (guv.y > 1.0 - y) {
+					if (guv.y > 1.0 - y2) {
+						gid.y += Math.sign(o.y - 0.5);
+						if (o.x > 0.5 !== even)
+							gid.x += Math.sign(o.x - 0.5);
+					}
+				}
+
+				const center = gid.plus(0.5).times(CELL);
+				if (gid.y % 2 === 0.0) center.x -= CELL * 0.5;
+				center.y /= factor;
+				return center;
+			}
+
+			const uv = new Vector2(x, y);
+			const uv2 = getHex(uv);
+			const uv3 = getHex(uv.minus(uv2).times(1.2).plus(uv2));
+			if (uv2.equals(uv3))
+				return Color.lerp(
+					new Color("#00000001"),
+					new Color("#855a0501"),
+					Number.remap(Vector2.dist(uv, uv2) / (CELL / 2), 0, 1, 0.5, 1)
+				);
+			return new Color("#de9e1d01");
+		}, 0.3, 0.02, (x, y) => {
 				if (Random.bool(.00001)) {
 					Element.trySetCell(x, y - 1, TYPES.BEE);
 					Element.trySetCell(x - 1, y, TYPES.BEE);
@@ -1663,9 +1703,9 @@
 	}
 
 	let eTS = 0
-	for(let y = 0; y < Math.ceil(ELEMENT_COUNT / Math.floor(window.width / TYPE_SELECTOR.SIZE)); y++){
-		for(let x = 0; x < Math.floor(window.width / TYPE_SELECTOR.SIZE); x++){
-			if(eTS >= ELEMENT_COUNT) break;
+	for (let y = 0; y < Math.ceil(ELEMENT_COUNT / Math.floor(window.width / TYPE_SELECTOR.SIZE)); y++) {
+		for (let x = 0; x < Math.floor(window.width / TYPE_SELECTOR.SIZE); x++) {
+			if (eTS >= ELEMENT_COUNT) break;
 			TYPE_SELECTOR.create(eTS, TYPE_SELECTOR.SIZE * x, TYPE_SELECTOR.SIZE * y);
 			eTS++;
 		}
@@ -1738,11 +1778,14 @@
 				if (mouse.wheelDelta > 0) lastBrush();
 				if (mouse.wheelDelta < 0) nextBrush();
 
+
 				for (const touch of touches.allPressed) {
 					const r = brushSize;
 					const { screen, world } = touches.get(touch);
 
-					if (SELECTORS_SHOWN && screen.y < TYPE_SELECTOR.SIZE) continue;
+					
+					const hovered = scene.main.sceneObjectArray.filter(el => el.collidePoint(screen)).length;
+					if (hovered) continue;
 
 					const { x: ox, y: oy } = Vector2.floor(world.over(CELL));
 
@@ -1827,7 +1870,7 @@
 
 			for (let i = 0; i < WIDTH; i++) for (let j = 0; j < HEIGHT; j++)
 				lastIds[i][j] = grid[i][j].id;
-			
+
 			scene.camera.drawInWorldSpace(() => {
 
 				renderer.fill(Color.BLACK);

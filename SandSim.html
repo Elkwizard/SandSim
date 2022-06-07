@@ -162,7 +162,7 @@
 	//alert((x-a^x-b)<0);
 
 	const TYPES = Object.fromEntries([
-		"AIR", "BRICK", "PRIDIUM", "GENDERFLUID", "EXOTHERMIA", "DDT", "STEEL", "LEAD", "LIQUID_LEAD", "BAHHUM", "ESTIUM", "ESTIUM_GAS", "WATER", "MARBLE", "CONDENSED_STONE", "LAVA", "LIGHTNING", "CLAY", "PARTICLE", "BEE", "HIVE", "HONEY", "SUGAR", "SALT", "SALT_WATER", "GRASS", "SOIL", "DAMP_SOIL", "ROOT", "KELP_TOP", "COPPER", "PNEUMATOCYST", "SAND", "KELP", "WOOD", "STEAM", "SMOKE", "STONE", "COAL", "WAX", "GRAINY_WAX", "MOLTEN_WAX", "FIRE", "ICE", "HYDROGEN", "FLOWER", "ACID", "POWER_LAVA", "GLASS", "OIL", "FUSE", "BLUE_FIRE", "BATTERY", "ELECTRICITY", "LIGHT",
+		"AIR", "HIGH_EXPLOSIVE", "EXPLOSIVE_DUST", "EXPLOSIVE", "STONE", "BRICK", "PRIDIUM", "GENDERFLUID", "EXOTHERMIA", "DDT", "STEEL", "LEAD", "LIQUID_LEAD", "BAHHUM", "ESTIUM", "ESTIUM_GAS", "WATER", "MARBLE", "CONDENSED_STONE", "LAVA", "LIGHTNING", "CLAY", "PARTICLE", "BEE", "HIVE", "HONEY", "SUGAR", "SALT", "SALT_WATER", "GRASS", "SOIL", "DAMP_SOIL", "ROOT", "KELP_TOP", "COPPER", "PNEUMATOCYST", "SAND", "KELP", "WOOD", "STEAM", "SMOKE", "COAL", "WAX", "GRAINY_WAX", "MOLTEN_WAX", "FIRE", "ICE", "HYDROGEN", "FLOWER", "ACID", "POWER_LAVA", "GLASS", "OIL", "FUSE", "BLUE_FIRE", "BATTERY", "ELECTRICITY", "LIGHT",
 		// "GOLD", "LIQUID_GOLD",
 		// "SILVER", "LIQUID_SILVER",
 		"LIQUID_COPPER",
@@ -719,6 +719,10 @@
 
 	const EXPLOSION_PASSTHROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.LIGHTNING, TYPES.AIR]);
 	EXPLOSION_PASSTHROUGH.delete(TYPES.BLUE_FIRE);
+	EXPLOSION_PASSTHROUGH.delete(TYPES.FIRE);
+
+	let explosiveSX = Random.int(-5, 5);
+	let explosiveSY = Random.int(-5, 5);
 
 	function explodeLine(x, y, x1, y1, vel, passthrough) {
 		const dx = x1 - x;
@@ -906,6 +910,74 @@
 			Element.reactMany(x, y, CONDUCTIVE, TYPES.ELECTRICITY);
 			Element.react(x, y, TYPES.ACID, TYPES.ACID)
 		}),
+
+		[TYPES.EXPLOSIVE_DUST]: new Element(1, Color.GRAY, .1, .8, solidUpdate, (x, y) => {
+			if(Random.bool(.6)) Random.bool() ? makeCircle(x, y, TYPES.FIRE, Random.int(3, 7)) : makeCircle(x, y, TYPES.SMOKE, Random.int(2, 5));
+			if(Random.bool(.15)) explode(x, y, Random.int(15, 40));
+		}),
+
+		[TYPES.EXPLOSIVE]: new Element(1, (x, y) => {
+			const s2 = Random.sampleSeed + 100;
+			const f = 3;
+
+			const t1 = Random.perlin(x + y, f);
+			const t2 = Random.perlin(x - y, f, s2);
+
+			const t1a = Random.perlin(x + (y+1), f);
+			const t1b = Random.perlin(x + (y-1), f);
+			const t1c = Random.perlin((x+1) + y, f);
+			const t1d = Random.perlin((x-1) + y, f);
+
+			const t2a = Random.perlin(x - (y+1), f, s2);
+			const t2b = Random.perlin(x - (y-1), f, s2);
+			const t2c = Random.perlin((x+1) - y, f, s2);
+			const t2d = Random.perlin((x-1) - y, f, s2);
+
+			const d = .77;
+
+			if (t1 > d && ((t1a > d || t1b > d) && (t1c > d || t1d > d)) || t2 > d && ((t2a > d || t2b > d) && (t2c > d || t2d > d)) ) {
+				return Random.bool() ? new Color("#26252601") : new Color("#2f2c3001");
+			}
+
+			return Random.choice(freqColoring([
+				["#b8372e01", 30], 
+				["#ab281f01", 30],
+				["#94282101", 20],
+				["#c74e4601", 1]
+			]));
+
+		}, .99, .6, (x, y) => {
+
+		}, (x, y) => {
+			if(Random.bool(.008)) Random.bool() ? makeCircle(x, y, TYPES.FIRE, Random.int(25, 40)) : makeCircle(x, y, TYPES.SMOKE, Random.int(10, 30));
+			if(Random.bool(.15)) explode(x, y, Random.int(15, 40));
+		}),
+
+		[TYPES.HIGH_EXPLOSIVE]: new Element(1, (x, y) => {
+			if ((x+y) % 30 == 0 || (x-y) % 30 == 0 || (x+y) % 30 == 1 || (x-y) % 30 == 1) {
+				return Random.bool() ? new Color("#46454601") : new Color("#1a191a01");
+			}
+
+			return Random.choice(freqColoring([
+				["#eba7eb01", 20], 
+				["#d199d101", 20],
+				["#ad7fad01", 1]
+			]));
+			
+		}, .99, 0, (x, y) => {
+			Element.affectNeighbors(x, y, (xN, yN) => {
+				if(Element.isType(xN, yN, TYPES.ELECTRICITY) ||
+				Element.isType(xN, yN, TYPES.BLUE_FIRE) ||
+				Element.isType(xN, yN, TYPES.POWER_LAVA) ||
+				Element.isType(xN, yN, TYPES.LIGHTNING)){
+					if(Random.bool(.005)) Random.bool() ? makeCircle(x, y, TYPES.BLUE_FIRE, Random.int(30, 50)) : makeCircle(x, y, TYPES.SMOKE, Random.int(15, 35));
+					if(Random.bool(.2)) explode(x, y, Random.int(20, 45));
+				}
+			});
+		}, (x, y) => {
+			//Element.setCell(x, y, TYPES.SMOKE);
+		}),
+
 		[TYPES.STONE]: new Element(1, [Color.GRAY, Color.colorScale(Color.GRAY, 0.95)], 0.8),
 
 		[TYPES.CONDENSED_STONE]: new Element(1, (x, y) => {
@@ -1184,7 +1256,7 @@
 		}, 0, 0.3, (x, y) => {
 			if((Random.bool(Random.perlin2D(x, y, .03)) / 10)) Element.react(x, y, TYPES.AIR, TYPES.BAHHUM);
 			else if (Random.bool(.01)) Element.react(x, y, TYPES.AIR, TYPES.BAHHUM);
-			else if(Element.isType(x, y - 1, TYPES.AIR) || Element.isType(x, y + 1, TYPES.AIR) || Element.isType(x - 1, yf, TYPES.AIR) || Element.isType(x + 1, y, TYPES.AIR)) Element.updateCell(x, y);
+			else if(Element.isType(x, y - 1, TYPES.AIR) || Element.isType(x, y + 1, TYPES.AIR) || Element.isType(x - 1, y, TYPES.AIR) || Element.isType(x + 1, y, TYPES.AIR)) Element.updateCell(x, y);
 
 			Element.consumeReact(x, y, TYPES.DDT, TYPES.LIGHTNING)
 		}),
@@ -1411,7 +1483,7 @@
 
 			lavaUpdate(x, y, TYPES.FIRE);
 
-			Element.react(x, y - 1, TYPES.AIR, TYPES.FIRE, 0.0005);
+			if(Random.bool(.0005)) Element.react(x, y - 1, TYPES.AIR, TYPES.FIRE);
 			Element.consumeReactMany(x, y, WATER_TYPES, TYPES.STONE);
 
 			if (Element.isType(x, y - 1, TYPES.LIGHTNING)) {

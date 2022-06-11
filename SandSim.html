@@ -1,4 +1,5 @@
-<script src="https://elkwizard.github.io/Hengine/Hengine.js">
+<script src="G:/My Drive/Desktop/Hengine/Hengine/Hengine.js">
+// <script src="https://elkwizard.github.io/Hengine/Hengine.js">
 	title = "Sandulation";
 
 	const RTX = true;
@@ -2153,7 +2154,7 @@
 					const { screen, world } = touches.get(touch);
 
 
-					const hovered = scene.main.sceneObjectArray.filter(el => el.collidePoint(screen)).length;
+					const hovered = scene.main.sceneObjectArray.filter(el => !el.hidden && el.collidePoint(screen)).length;
 					if (hovered) continue;
 
 					const { x: ox, y: oy } = Vector2.floor(world.over(CELL));

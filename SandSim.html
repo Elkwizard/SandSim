@@ -99,6 +99,16 @@
 				return lightColor * lightIntensity * globalFalloff * localFalloff;
 			}
 
+			// stolen from websites and whatnot
+			vec3 ACESFilm(vec3 x) {
+				float a = 2.51f;
+				float b = 0.03f;
+				float c = 2.43f;
+				float d = 0.59f;
+				float e = 0.14f;
+				return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
+			}
+
 			vec4 shader() {
 				time;
 
@@ -121,7 +131,13 @@
 				}
 				
 				albedo *= (ambientLighting + directional);
-				return vec4(albedo.rgb + glow.rgb, 1.0);
+				
+				vec3 hdr = albedo.rgb + glow.rgb;
+
+				// hdr = 1.0 / (1.0 + exp(-5.0 * (hdr - 0.5)));
+				// hdr = ACESFilm(hdr);
+
+				return vec4(hdr, 1.0);
 			}
 		`);
 

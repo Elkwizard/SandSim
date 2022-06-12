@@ -140,7 +140,7 @@
 				return vec4(hdr, 1.0);
 			}
 		`);
-
+		
 
 		return function ({
 			direction,
@@ -485,9 +485,9 @@
 		}
 
 		static threeCheck(x, y, element = TYPES.AIR) {
-			return (Element.isType(x, y, element)
-				&& Element.isType(x + 1, y, element)
-				&& Element.isType(x - 1, y, element));
+			return Element.isType(x, y, element) &&
+				Element.isType(x + 1, y, element) &&
+				Element.isType(x - 1, y, element);
 		}
 
 		// [7] [0] [1]
@@ -842,30 +842,30 @@
 		[TYPES.EXOTHERMIA]: new Element(1, Color.RED),
 
 		[TYPES.PRIDIUM]: new Element(1, flag([
-			"#D8097E01",
-			"#D8097E01",
-			"#8C579C01",
-			"#24468E01",
-			"#24468E01",
-			"#FCF43401",
-			"#FFFFFF01",
-			"#9C59D101",
-			"#2C2C2C01",
-			"#FF1E2601",
-			"#FF941E01",
-			"#FFFF0001",
-			"#06BD0001",
-			"#001A9801",
-			"#76008801",
-			"#55CDFD01",
-			"#F6AAB701",
-			"#FFFFFF01",
-			"#F6AAB701",
-			"#55CDFD01",
-			"#00000001",
-			"#A3A3A301",
-			"#FFFFFF01",
-			"#80008001",
+			0xD8097E,
+			0xD8097E,
+			0x8C579C,
+			0x24468E,
+			0x24468E,
+			0xFCF434,
+			0xFFFFFF,
+			0x9C59D1,
+			0x2C2C2C,
+			0xFF1E26,
+			0xFF941E,
+			0xFFFF00,
+			0x06BD00,
+			0x001A98,
+			0x760088,
+			0x55CDFD,
+			0xF6AAB7,
+			0xFFFFFF,
+			0xF6AAB7,
+			0x55CDFD,
+			0x000000,
+			0xA3A3A3,
+			0xFFFFFF,
+			0x800080,
 		]), 0, 1),
 		[TYPES.GENDERFLUID]: new Element(0, genderfluidFlag, 0, 0, liquidUpdate),
 
@@ -1122,7 +1122,13 @@
 				//see if it can happen
 				if (Random.bool(.05)) {
 
-					if (Element.threeCheck(x, y - 1, TYPES.WATER) && Element.threeCheck(x, y - 2, TYPES.WATER) && Element.isType(x + 1, y, TYPES.WATER) && Element.isType(x - 1, y, TYPES.WATER) && inBounds(x, y - 1)) {
+					if (
+						Element.threeCheck(x, y - 1, TYPES.WATER) &&
+						Element.threeCheck(x, y - 2, TYPES.WATER) &&
+						Element.isType(x + 1, y, TYPES.WATER) &&
+						Element.isType(x - 1, y, TYPES.WATER) &&
+						inBounds(x, y - 1)
+					) {
 						//maybe it'll happen
 
 						//kelp checks
@@ -2310,7 +2316,6 @@
 				lastIds[i][j] = grid[i][j].id;
 
 			scene.camera.drawInWorldSpace(() => {
-
 				renderer.fill(Color.BLACK);
 				if (RTX) {
 					const image = rays({
@@ -2322,38 +2327,39 @@
 				} else {
 					renderer.image(tex).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
 				}
-
-				if (keyboard.pressed("v")) {
-					if (!debugFrame)
-						debugFrame = new FastFrame(width, height);
-
-					debugFrame.renderer.transform = renderer.transform;
-
-					for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
-						const chunk = chunks[i][j];
-
-						if (chunk.sleep && chunk.sleepNext)
-							continue;
-
-						const cx = chunk.x * CHUNK;
-						const cy = chunk.y * CHUNK;
-						for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
-							const x = cx + i;
-							const y = cy + j;
-							if (x >= WIDTH || y >= HEIGHT)
-								continue;
-							const cell = grid[x][y];
-							if (cell.vel.sqrMag) {
-								debugFrame.renderer.stroke(Color.RED).arrow(x * CELL, y * CELL, x * CELL + cell.vel.x * CELL, y * CELL + cell.vel.y * CELL);
-							}
-						}
-
-						debugFrame.renderer.stroke(Color.RED).rect(i * CHUNK * CELL, j * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
-					}
-					renderer.image(debugFrame).default(0, 0);
-					debugFrame.renderer.clear();
-				}
 			});
+
+			if (keyboard.pressed("v")) {
+				if (!debugFrame)
+					debugFrame = new FastFrame(width, height);
+
+				debugFrame.renderer.transform = scene.camera;
+
+				for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+					const chunk = chunks[i][j];
+
+					if (chunk.sleep && chunk.sleepNext)
+						continue;
+
+					const cx = chunk.x * CHUNK;
+					const cy = chunk.y * CHUNK;
+					for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
+						const x = cx + i;
+						const y = cy + j;
+						if (x >= WIDTH || y >= HEIGHT)
+							continue;
+						const cell = grid[x][y];
+						if (cell.vel.sqrMag) {
+							debugFrame.renderer.stroke(Color.RED).arrow(x * CELL, y * CELL, x * CELL + cell.vel.x * CELL, y * CELL + cell.vel.y * CELL);
+						}
+					}
+
+					debugFrame.renderer.stroke(Color.RED).rect(i * CHUNK * CELL, j * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
+				}
+				
+				renderer.image(debugFrame).default(0, 0);
+				debugFrame.renderer.clear();
+			}
 
 			if (!paused) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
 				const chunk = chunks[i][j];

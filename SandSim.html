@@ -474,28 +474,6 @@
 				&& Element.isType(x - 1, y, element));
 		}
 
-		// [7] [0] [1]
-		// [6] [ ] [2]
-		// [5] [4] [3]
-		// returns true if all neighbors are "element," returns false otherwise
-		static check(x, y, element = TYPES.AIR, neighbors = [0]) {
-			for (let i = 0; i < neighbors.length; i++) {
-				if (neighbors[i] < 0 || neighbors[i] > 7) throw `"${neighbors[i]}" is not an accepted value for the [neighbors] array (must be between 0 and 7, inclusive)`;
-
-				if (neightbors[i] == 0 && !Element.isType(x, y - 1, element)) return false;
-				else if (neightbors[i] == 1 && !Element.isType(x + 1, y - 1, element)) return false;
-				else if (neightbors[i] == 2 && !Element.isType(x + 1, y, element)) return false;
-				else if (neightbors[i] == 3 && !Element.isType(x + 1, y + 1, element)) return false;
-				else if (neightbors[i] == 4 && !Element.isType(x, y + 1, element)) return false;
-				else if (neightbors[i] == 5 && !Element.isType(x - 1, y + 1, element)) return false;
-				else if (neightbors[i] == 6 && !Element.isType(x - 1, y, element)) return false;
-				else if (neightbors[i] == 7 && !Element.isType(x - 1, y - 1, element)) return false;
-				else throw "ball";
-			}
-
-			return true;
-		}
-
 		static move(x, y, fx, fy) {
 			const t = grid[fx][fy];
 			grid[fx][fy] = grid[x][y];
@@ -823,7 +801,18 @@
 
 		[TYPES.ENDOTHERMIA]: new Element(1, Color.BLUE),
 
-		[TYPES.EXOTHERMIA]: new Element(1, Color.RED),
+		[TYPES.EXOTHERMIA]: new Element(1, (x, y) => {
+			if (y == 0) return new Color("#b5193b")
+			else if (y == 1) return new Color("#b52619")
+			else if (y == 2) return new Color("#b33b30")
+			else if (y == 3) return new Color("#bf5e3b")
+			else if (y == 4) return new Color("#c9904b")
+			else if (y == 5) return new Color("#cca85c")
+			else if (y == 6) return new Color("#e0cc72")
+			else if (y == 7) return new Color("#e8e280")
+			else if (y == 8) return new Color("#f5f09a");
+			else return new Color("#d7f8fa");
+		}),
 
 		[TYPES.PRIDIUM]: new Element(1, flag([
 			"#D8097E01",
@@ -1670,12 +1659,23 @@
 			explode(x, y - 1, 2);
 		}),
 
-		[TYPES.ANT]: new Element(2, [new Color("red")], 0, 0.05, (x, y) => {
-			if (!solidUpdate(x, y)) {
-				if (!Element.tryMove(x, y, x + (Random.bool() ? -1 : 1), y, LIQUID_PASS_THROUGH))
-					Element.updateCell(x, y);
+		[TYPES.ANT]: new Element(2, [new Color("red")], 0, 0.05, (x, y) => {			
+			if(Element.isType(x, y - 1, TYPES.AIR)
+			&& Element.isType(x + 1, y - 1, TYPES.AIR)
+			&& Element.isType(x - 1, y - 1, TYPES.AIR)
+			&& Element.isType(x, y + 1, TYPES.AIR)
+			&& Element.isType(x + 1, y + 1, TYPES.AIR)
+			&& Element.isType(x - 1, y + 1, TYPES.AIR)
+			&& Element.isType(x + 1, y, TYPES.AIR)
+			&& Element.isType(x - 1, y + 1, TYPES.AIR)
+			) solidUpdate(x, y);
+			else{
+				let d = Random.bool() ? -1 : 1;
+				if(Element.isType(x + d, y, TYPES.AIR)) Element.move(x, y, x + d, y);
+				else if(Element.isType(x + d, y - 1, TYPES.AIR)) Element.move(x, y, x + d, y - 1);
+				else if(Element.isType(x, y - 1, TYPES.AIR) && (!Element.isType(x - 1, y - 1, TYPES.AIR) || !Element.isType(x + 1, y - 1, TYPES.AIR))) Element.move(x, y, x, y - 1);
+				else Element.updateCell(x, y);
 			}
-			
 
 		}, (x, y) => {
 			makeCircle(x, y - 1, TYPES.SALT, 2);

@@ -99,6 +99,16 @@
 				return lightColor * lightIntensity * globalFalloff * localFalloff;
 			}
 
+			// stolen from websites and whatnot
+			vec3 ACESFilm(vec3 x) {
+				float a = 2.51f;
+				float b = 0.03f;
+				float c = 2.43f;
+				float d = 0.59f;
+				float e = 0.14f;
+				return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
+			}
+
 			vec4 shader() {
 				time;
 
@@ -121,10 +131,16 @@
 				}
 				
 				albedo *= (ambientLighting + directional);
-				return vec4(albedo.rgb + glow.rgb, 1.0);
+				
+				vec3 hdr = albedo.rgb + glow.rgb;
+
+				// hdr = 1.0 / (1.0 + exp(-5.0 * (hdr - 0.5)));
+				// hdr = ACESFilm(hdr);
+
+				return vec4(hdr, 1.0);
 			}
 		`);
-
+		
 
 		return function ({
 			direction,
@@ -166,7 +182,7 @@
 		"SUNFLOWER_PETAL", "SUNFLOWER_STEM", "SUNFLOWER_SEED",
 		"SOIL", "DAMP_SOIL", "ROOT", "GRASS", "FLOWER",
 		"HIGH_EXPLOSIVE", "EXPLOSIVE", "EXPLOSIVE_DUST",
-		"STONE", "CONDENSED_STONE", "MARBLE", 
+		"STONE", "CONDENSED_STONE", "MARBLE",
 		"CLAY", "BRICK",
 		"PRIDIUM", "GENDERFLUID",
 		"PARTICLE",
@@ -176,7 +192,7 @@
 		"WATER", "ICE", "SALT", "SALT_WATER",
 		"SAND", "KELP", "KELP_TOP", "PNEUMATOCYST",
 		"WOOD", "COAL", "OIL", "FUSE",
-		"WAX", "GRAINY_WAX", "MOLTEN_WAX", 
+		"WAX", "GRAINY_WAX", "MOLTEN_WAX",
 		"LAVA", "POWER_LAVA",
 		"STEAM", "SMOKE", "HYDROGEN",
 		"GLASS", "ACID",
@@ -469,9 +485,9 @@
 		}
 
 		static threeCheck(x, y, element = TYPES.AIR) {
-			return (Element.isType(x, y, element)
-				&& Element.isType(x + 1, y, element)
-				&& Element.isType(x - 1, y, element));
+			return Element.isType(x, y, element) &&
+				Element.isType(x + 1, y, element) &&
+				Element.isType(x - 1, y, element);
 		}
 
 		static move(x, y, fx, fy) {
@@ -815,30 +831,30 @@
 		}),
 
 		[TYPES.PRIDIUM]: new Element(1, flag([
-			"#D8097E01",
-			"#D8097E01",
-			"#8C579C01",
-			"#24468E01",
-			"#24468E01",
-			"#FCF43401",
-			"#FFFFFF01",
-			"#9C59D101",
-			"#2C2C2C01",
-			"#FF1E2601",
-			"#FF941E01",
-			"#FFFF0001",
-			"#06BD0001",
-			"#001A9801",
-			"#76008801",
-			"#55CDFD01",
-			"#F6AAB701",
-			"#FFFFFF01",
-			"#F6AAB701",
-			"#55CDFD01",
-			"#00000001",
-			"#A3A3A301",
-			"#FFFFFF01",
-			"#80008001",
+			0xD8097E,
+			0xD8097E,
+			0x8C579C,
+			0x24468E,
+			0x24468E,
+			0xFCF434,
+			0xFFFFFF,
+			0x9C59D1,
+			0x2C2C2C,
+			0xFF1E26,
+			0xFF941E,
+			0xFFFF00,
+			0x06BD00,
+			0x001A98,
+			0x760088,
+			0x55CDFD,
+			0xF6AAB7,
+			0xFFFFFF,
+			0xF6AAB7,
+			0x55CDFD,
+			0x000000,
+			0xA3A3A3,
+			0xFFFFFF,
+			0x800080,
 		]), 0, 1),
 		[TYPES.GENDERFLUID]: new Element(0, genderfluidFlag, 0, 0, liquidUpdate),
 
@@ -892,7 +908,7 @@
 				}
 			}
 
-			color ??= Random.bool() ? 0xffffff : 0xf7f6f2;;
+			color ??= Random.bool() ? 0xffffff : 0xf7f6f2;
 
 			return Color.alpha(new Color(color), Color.EPSILON);
 		}, 0.9),
@@ -907,14 +923,14 @@
 			if (Math.floor(x / W) % 2) gy = H - 1 - gy;
 
 			const depth = Math.sqrt((W / 2) ** 2 - (gx - W / 2) ** 2) / (W / 2);
-			
+
 			let color = Color.GRAY;
 
 			if (gy < (H - 1) * 0.1) color = Color.RED;
 			if (gy > (H - 1) * 0.9) color = Color.ORANGE;
 
 			return new Color(color.red * depth, color.green * depth, color.blue * depth, Color.EPSILON);
-			
+
 			// let c1 = Color.lerp(new Color("#FF000001"), new Color("#FF000055"), Random.perlin2D(x, y, .01));
 			// let c2 = Color.alpha(Color.BLACK, Color.EPSILON);
 			// return (x % 2 && y % 2) ? c1 : c2;
@@ -929,8 +945,8 @@
 			["#db755e", 30],
 			["#e8674a", 1],
 		]), .1, .8, solidUpdate, (x, y) => {
-			if(Random.bool(.6)) Random.bool() ? makeCircle(x, y, TYPES.FIRE, Random.int(3, 7)) : makeCircle(x, y, TYPES.SMOKE, Random.int(2, 5));
-			if(Random.bool(.15)) explode(x, y, Random.int(15, 40));
+			if (Random.bool(.6)) Random.bool() ? makeCircle(x, y, TYPES.FIRE, Random.int(3, 7)) : makeCircle(x, y, TYPES.SMOKE, Random.int(2, 5));
+			if (Random.bool(.15)) explode(x, y, Random.int(15, 40));
 		}),
 
 		[TYPES.EXPLOSIVE]: new Element(1, (x, y) => {
@@ -940,24 +956,24 @@
 			const t1 = Random.perlin(x + y, f);
 			const t2 = Random.perlin(x - y, f, s2);
 
-			const t1a = Random.perlin(x + (y+1), f);
-			const t1b = Random.perlin(x + (y-1), f);
-			const t1c = Random.perlin((x+1) + y, f);
-			const t1d = Random.perlin((x-1) + y, f);
+			const t1a = Random.perlin(x + (y + 1), f);
+			const t1b = Random.perlin(x + (y - 1), f);
+			const t1c = Random.perlin((x + 1) + y, f);
+			const t1d = Random.perlin((x - 1) + y, f);
 
-			const t2a = Random.perlin(x - (y+1), f, s2);
-			const t2b = Random.perlin(x - (y-1), f, s2);
-			const t2c = Random.perlin((x+1) - y, f, s2);
-			const t2d = Random.perlin((x-1) - y, f, s2);
+			const t2a = Random.perlin(x - (y + 1), f, s2);
+			const t2b = Random.perlin(x - (y - 1), f, s2);
+			const t2c = Random.perlin((x + 1) - y, f, s2);
+			const t2d = Random.perlin((x - 1) - y, f, s2);
 
 			const d = .77;
 
-			if (t1 > d && ((t1a > d || t1b > d) && (t1c > d || t1d > d)) || t2 > d && ((t2a > d || t2b > d) && (t2c > d || t2d > d)) ) {
+			if (t1 > d && ((t1a > d || t1b > d) && (t1c > d || t1d > d)) || t2 > d && ((t2a > d || t2b > d) && (t2c > d || t2d > d))) {
 				return Random.bool() ? new Color("#26252601") : new Color("#2f2c3001");
 			}
 
 			return Random.choice(freqColoring([
-				["#b8372e01", 30], 
+				["#b8372e01", 30],
 				["#ab281f01", 30],
 				["#94282101", 20],
 				["#c74e4601", 1]
@@ -966,43 +982,43 @@
 		}, .99, .6, (x, y) => {
 
 		}, (x, y) => {
-			if(Random.bool(.008)) Random.bool() ? makeCircle(x, y, TYPES.FIRE, Random.int(25, 40)) : makeCircle(x, y, TYPES.SMOKE, Random.int(10, 30));
-			if(Random.bool(.15)) explode(x, y, Random.int(15, 40));
+			if (Random.bool(.008)) Random.bool() ? makeCircle(x, y, TYPES.FIRE, Random.int(25, 40)) : makeCircle(x, y, TYPES.SMOKE, Random.int(10, 30));
+			if (Random.bool(.15)) explode(x, y, Random.int(15, 40));
 		}),
 
 		[TYPES.HIGH_EXPLOSIVE]: new Element(1, (x, y) => {
 			const mod = (a, b) => (a % b + b) % b;
-			if (mod(x+y, 30) <= 1 || mod(x-y, 30) <= 1) {
+			if (mod(x + y, 30) <= 1 || mod(x - y, 30) <= 1) {
 				return Random.bool() ? new Color("#46454601") : new Color("#1a191a01");
 			}
 
 			return Random.choice(freqColoring([
-				["#eba7eb01", 20], 
+				["#eba7eb01", 20],
 				["#d199d101", 20],
 				["#ad7fad01", 1]
 			]));
-			
+
 		}, .95, 0.1, (x, y) => {
 			Element.affectNeighbors(x, y, (xN, yN) => {
-				if(Element.isType(xN, yN, TYPES.ELECTRICITY) ||
-				Element.isType(xN, yN, TYPES.BLUE_FIRE) ||
-				Element.isType(xN, yN, TYPES.POWER_LAVA) ||
-				Element.isType(xN, yN, TYPES.LIGHTNING)){
-					if(Random.bool(.004)) Random.bool() ? makeCircle(x, y, Random.bool(.3) ? TYPES.FIRE : TYPES.BLUE_FIRE, Random.int(30, 50)) : makeCircle(x, y, TYPES.SMOKE, Random.int(15, 35));
-					if(Random.bool(.2)) explode(x, y, Random.int(20, 45));
+				if (Element.isType(xN, yN, TYPES.ELECTRICITY) ||
+					Element.isType(xN, yN, TYPES.BLUE_FIRE) ||
+					Element.isType(xN, yN, TYPES.POWER_LAVA) ||
+					Element.isType(xN, yN, TYPES.LIGHTNING)) {
+					if (Random.bool(.004)) Random.bool() ? makeCircle(x, y, Random.bool(.3) ? TYPES.FIRE : TYPES.BLUE_FIRE, Random.int(30, 50)) : makeCircle(x, y, TYPES.SMOKE, Random.int(15, 35));
+					if (Random.bool(.2)) explode(x, y, Random.int(20, 45));
 				}
 			});
 		}, (x, y) => {
 			Element.affectNeighbors(x, y, (xN, yN) => {
-				if(Element.isType(xN, yN, TYPES.ELECTRICITY) ||
-				Element.isType(xN, yN, TYPES.BLUE_FIRE) ||
-				Element.isType(xN, yN, TYPES.POWER_LAVA) ||
-				Element.isType(xN, yN, TYPES.LIGHTNING)){
-					if(Random.bool(.004)) Random.bool() ? makeCircle(x, y, Random.bool(.3) ? TYPES.FIRE : TYPES.BLUE_FIRE, Random.int(30, 50)) : makeCircle(x, y, TYPES.SMOKE, Random.int(15, 35));
-					if(Random.bool(.2)) explode(x, y, Random.int(20, 45));
+				if (Element.isType(xN, yN, TYPES.ELECTRICITY) ||
+					Element.isType(xN, yN, TYPES.BLUE_FIRE) ||
+					Element.isType(xN, yN, TYPES.POWER_LAVA) ||
+					Element.isType(xN, yN, TYPES.LIGHTNING)) {
+					if (Random.bool(.004)) Random.bool() ? makeCircle(x, y, Random.bool(.3) ? TYPES.FIRE : TYPES.BLUE_FIRE, Random.int(30, 50)) : makeCircle(x, y, TYPES.SMOKE, Random.int(15, 35));
+					if (Random.bool(.2)) explode(x, y, Random.int(20, 45));
 				}
 			});
-			
+
 			Element.trySetCell(x, y - 1, TYPES.SMOKE)
 		}),
 
@@ -1020,9 +1036,9 @@
 				return (p > .5) ? new Color("#3d3c4201") : new Color("#2c2c2e01");
 			};
 			return Color.avg([layer(x, y), layer(x * 5, y * 5), layer(x * 10, y * 10)]);
-		// freqColoring([
+			// freqColoring([
 		}
-		, 1),
+			, 1),
 
 		[TYPES.GLASS]: new Element(.1, [new Color("#7e8d94"), new Color("#838f91")]),
 
@@ -1071,7 +1087,7 @@
 			["#a39c8c", 2]
 		]), 0.1, 0.06, (x, y) => {
 			solidUpdate(x, y);
-			if(Element.isType(x, y + 1, TYPES.DAMP_SOIL) && grid[x][y+1].acts == 0){
+			if (Element.isType(x, y + 1, TYPES.DAMP_SOIL) && grid[x][y + 1].acts == 0) {
 				Element.die(x, y);
 				grid[x][y + 1].acts = 5;
 			}
@@ -1095,7 +1111,13 @@
 				//see if it can happen
 				if (Random.bool(.05)) {
 
-					if (Element.threeCheck(x, y - 1, TYPES.WATER) && Element.threeCheck(x, y - 2, TYPES.WATER) && Element.isType(x + 1, y, TYPES.WATER) && Element.isType(x - 1, y, TYPES.WATER) && inBounds(x, y - 1)) {
+					if (
+						Element.threeCheck(x, y - 1, TYPES.WATER) &&
+						Element.threeCheck(x, y - 2, TYPES.WATER) &&
+						Element.isType(x + 1, y, TYPES.WATER) &&
+						Element.isType(x - 1, y, TYPES.WATER) &&
+						inBounds(x, y - 1)
+					) {
 						//maybe it'll happen
 
 						//kelp checks
@@ -1233,10 +1255,10 @@
 			return true;
 		}),*/
 		[TYPES.LIQUID_COPPER]: new Element(20, [new Color("#a35a33"), new Color("#8c4c24")], 0, 0, (x, y) => {
-			
+
 			if (!Element.consumeReactMany(x, y, COLD, TYPES.COPPER))
 				liquidUpdate(x, y);
-			
+
 			lavaUpdate(x, y, TYPES.FIRE);
 		}),
 		[TYPES.COPPER]: new Element(10, (x, y) => {
@@ -1300,9 +1322,9 @@
 			// return Color.lerp(new Color("#a8f0bb01"), new Color("#d1f0d900"), p)
 
 		}, 0, 0.3, (x, y) => {
-			if((Random.bool(Random.perlin2D(x, y, .03)) / 10)) Element.react(x, y, TYPES.AIR, TYPES.BAHHUM);
+			if ((Random.bool(Random.perlin2D(x, y, .03)) / 10)) Element.react(x, y, TYPES.AIR, TYPES.BAHHUM);
 			else if (Random.bool(.01)) Element.react(x, y, TYPES.AIR, TYPES.BAHHUM);
-			else if(Element.isType(x, y - 1, TYPES.AIR) || Element.isType(x, y + 1, TYPES.AIR) || Element.isType(x - 1, y, TYPES.AIR) || Element.isType(x + 1, y, TYPES.AIR)) Element.updateCell(x, y);
+			else if (Element.isType(x, y - 1, TYPES.AIR) || Element.isType(x, y + 1, TYPES.AIR) || Element.isType(x - 1, y, TYPES.AIR) || Element.isType(x + 1, y, TYPES.AIR)) Element.updateCell(x, y);
 
 			Element.consumeReact(x, y, TYPES.DDT, TYPES.LIGHTNING)
 		}),
@@ -1353,20 +1375,20 @@
 		}),
 
 		[TYPES.ROOT]: new Element(1, [new Color("#bfb19b"), new Color("#baac99"), new Color("#d6c09f")], 0.3, .02, (x, y) => {
-			if(grid[x][y].acts != 1){
+			if (grid[x][y].acts != 1) {
 				let ox = x;
-				
+
 				let p = Random.perlin(y + 1, 0.25, x);
 				ox += Math.round(Number.remap(p, 0, 1, -1, 1));
-				
+
 
 				if (Random.bool(.1) && inBounds(ox, y + 1) && (Element.isType(ox, y + 1, TYPES.SOIL) || Element.isType(ox, y + 1, TYPES.DAMP_SOIL))) {
 					grid[x][y].acts = 1;
 					Element.setCell(ox, y + 1, TYPES.ROOT);
-				}	
+				}
 				else Element.updateCell(x, y);
 
-				if(Random.bool(.08)) grid[x][y].acts = 1;
+				if (Random.bool(.08)) grid[x][y].acts = 1;
 			}
 		}, (x, y) => {
 			Element.trySetCell(x, y - 1, Random.bool(.7) ? TYPES.SMOKE : TYPES.STEAM);
@@ -1378,23 +1400,23 @@
 
 		[TYPES.SUNFLOWER_STEM]: new Element(1, [new Color("#2fbd39"), new Color("#57c95f"), new Color("#43ab4a")], .3, 0.03, (x, y) => {
 			Element.trySetCell(x, y + 1, TYPES.ROOT, SOIL_TYPES);
-			
-			if(grid[x][y].acts > 1 && Element.isType(x, y - 1, TYPES.AIR)){
-				if(Random.bool(.05)){
+
+			if (grid[x][y].acts > 1 && Element.isType(x, y - 1, TYPES.AIR)) {
+				if (Random.bool(.05)) {
 					Element.setCell(x, y - 1, TYPES.SUNFLOWER_STEM);
 					grid[x][y - 1].acts = grid[x][y].acts - 1;
-				}else Element.updateCell(x, y)
+				} else Element.updateCell(x, y)
 			}
-			if(grid[x][y].acts == 1){
-				let shift = Random.range(0, Math.PI/9)
-				for(let i = shift; i < 2*Math.PI + shift; i += Math.PI / 9){
+			if (grid[x][y].acts == 1) {
+				let shift = Random.range(0, Math.PI / 9)
+				for (let i = shift; i < 2 * Math.PI + shift; i += Math.PI / 9) {
 					const c = Math.cos(i);
 					const s = Math.sin(i);
 					makeLine(Math.round(c * 6 + x), Math.round(s * 6 + y), Math.round(c * 7 + x), Math.round(s * 7 + y), TYPES.SUNFLOWER_PETAL, 1, 1);
 				}
 				makeCircle(x, y, TYPES.SUNFLOWER_PETAL, 6, 1)
 				makeCircle(x, y, TYPES.SUNFLOWER_SEED, 5, 1, ALL_PASSTHROUGH)
-				
+
 				grid[x][y].acts--;
 			}
 		}, (x, y) => {
@@ -1409,19 +1431,19 @@
 			solidUpdate(x, y)
 
 			const d = Random.bool() ? 1 : -1;
-			if(grid[x][y].acts == 5 && Element.threeCheck(x, y - 1, TYPES.AIR) && Element.threeCheck(x + d, y - 1, TYPES.AIR)){
-				if(Random.bool(.03)){
+			if (grid[x][y].acts == 5 && Element.threeCheck(x, y - 1, TYPES.AIR) && Element.threeCheck(x + d, y - 1, TYPES.AIR)) {
+				if (Random.bool(.03)) {
 					Element.setCell(x, y - 1, TYPES.SUNFLOWER_STEM);
 					Element.setCell(x + d, y - 1, TYPES.SUNFLOWER_STEM);
 					let h = Random.int(45, 60);
 					grid[x][y - 1].acts = h;
 					grid[x + d][y - 1].acts = h;
-				}else Element.updateCell(x, y);
+				} else Element.updateCell(x, y);
 			};
 
 			if (Element.isType(x, y - 1, TYPES.WATER))
 				Element.permeate(x, y, TYPES.DAMP_SOIL, TYPES.SOIL, TYPES.WATER, 2);
-			
+
 			if (Element.isType(x, y - 1, TYPES.AIR) && Element.threeCheck(x, y + 1, TYPES.DAMP_SOIL)) {
 				if (Random.bool(.0001))
 					Element.setCell(x, y - 1, TYPES.GRASS);
@@ -1434,7 +1456,7 @@
 		}),
 
 		[TYPES.GRASS]: new Element(1, freqColoring([
-			["#53f581", 30], 
+			["#53f581", 30],
 			["#33d44e", 30],
 			["#42e35d", 30],
 			["#3fbf55 ", 1]
@@ -1457,7 +1479,7 @@
 			else Element.updateCell(x, y);
 
 			if (Element.isType(x, y - 1, TYPES.WATER) || Element.isType(x, y - 1, TYPES.SALT_WATER)) {
-				let w = Element.isType(x, y - 1, TYPES.WATER);	
+				let w = Element.isType(x, y - 1, TYPES.WATER);
 				//grow 
 				if ((Random.bool(.1) && w) || (Random.bool(.005) && !w)) Element.setCell(x, y - 1, TYPES.GRASS);
 				else Element.updateCell(x, y);
@@ -1467,7 +1489,7 @@
 				while (Element.isType(x, y + below, TYPES.GRASS) && inBounds(x, y + below)) {
 					below++;
 				}
-				if((w && Random.bool(.05)) || (!w && Random.bool(.005))){
+				if ((w && Random.bool(.05)) || (!w && Random.bool(.005))) {
 					if (Element.isType(x, y + below, TYPES.AIR)) Element.setCell(x, y + below, w ? TYPES.WATER : TYPES.SALT);
 					else if (Element.isType(x, y + below, TYPES.SOIL)) Element.setCell(x, y + below, TYPES.DAMP_SOIL);
 					else if (Element.isType(x, y + below, TYPES.DAMP_SOIL)) Element.permeate(x, y + below, TYPES.DAMP_SOIL, TYPES.SOIL, TYPES.WATER);
@@ -1475,7 +1497,7 @@
 				}
 				else Element.updateCell(x, y);
 
-				if(Element.isType(x, y + below, TYPES.AIR) || Element.isType(x, y + below, TYPES.SOIL) || Element.isType(x, y + below, TYPES.DAMP_SOIL)) Element.die(x, y - 1);
+				if (Element.isType(x, y + below, TYPES.AIR) || Element.isType(x, y + below, TYPES.SOIL) || Element.isType(x, y + below, TYPES.DAMP_SOIL)) Element.die(x, y - 1);
 			}
 
 			if (Random.bool(.0004)) Element.trySetCell(x, y + 1, TYPES.ROOT, SOIL_TYPES);
@@ -1531,7 +1553,7 @@
 
 			lavaUpdate(x, y, TYPES.FIRE);
 
-			if(Random.bool(.0005)) Element.react(x, y - 1, TYPES.AIR, TYPES.FIRE);
+			if (Random.bool(.0005)) Element.react(x, y - 1, TYPES.AIR, TYPES.FIRE);
 			Element.consumeReactMany(x, y, WATER_TYPES, TYPES.STONE);
 
 			if (Element.isType(x, y - 1, TYPES.LIGHTNING)) {
@@ -1572,7 +1594,7 @@
 				return (p > .5) ? new Color("#2e211701") : new Color("#553C2A01");
 			};
 			return Color.avg([layer(x * 5, y * 5), layer(x * 10, y * 10), layer(x * 15, y * 15)]);
-		
+
 		}, 0.7, 0.05, () => null, (x, y) => {
 			Element.trySetCell(x, y - 1, TYPES.SMOKE);
 		}),
@@ -1587,12 +1609,12 @@
 
 		[TYPES.HIVE]: new Element(1, (x, y) => {
 			const CELL = 6;
-			
+
 			const getHex = uv => {
 				uv = uv.get();
 				const factor = 1.15;
 				uv.y *= factor;
-				
+
 				let gid = Vector2.floor(uv.over(CELL));
 				const even = gid.y % 2 === 0;
 				if (even) uv.x += CELL * 0.5;
@@ -1606,9 +1628,9 @@
 				const slope = Math.tan(3.1415926 / 6.0) * factor;
 
 				const y = slope * (guv.x - 0.5);
-				
+
 				const y2 = y - 0.25 * slope;
-				
+
 				if (guv.y > 1.0 - y) {
 					if (guv.y > 1.0 - y2) {
 						gid.y += Math.sign(o.y - 0.5);
@@ -1634,20 +1656,20 @@
 				);
 			return new Color("#de9e1d01");
 		}, 0.3, 0.02, (x, y) => {
-				if (Random.bool(.00004)) {
-					Element.trySetCell(x, y - 1, TYPES.BEE);
-					Element.trySetCell(x - 1, y, TYPES.BEE);
-					Element.trySetCell(x + 1, y, TYPES.BEE);
-				}
+			if (Random.bool(.00004)) {
+				Element.trySetCell(x, y - 1, TYPES.BEE);
+				Element.trySetCell(x - 1, y, TYPES.BEE);
+				Element.trySetCell(x + 1, y, TYPES.BEE);
+			}
 
-				if (Random.bool(.0005)) Random.bool(.99) ? Element.trySetCell(x, y + 1, TYPES.HONEY) : Element.trySetCell(x, y + 1, TYPES.GRAINY_WAX);
+			if (Random.bool(.0005)) Random.bool(.99) ? Element.trySetCell(x, y + 1, TYPES.HONEY) : Element.trySetCell(x, y + 1, TYPES.GRAINY_WAX);
 
-				Element.updateCell(x, y);
+			Element.updateCell(x, y);
 
-			}, (x, y) => {
-				if (Random.bool(.7)) Element.trySetCell(x, y - 1, TYPES.SMOKE);
-				Element.trySetCell(x, y - 1, Random.bool(.3) ? TYPES.MOLTEN_WAX : TYPES.HONEY);
-			}),
+		}, (x, y) => {
+			if (Random.bool(.7)) Element.trySetCell(x, y - 1, TYPES.SMOKE);
+			Element.trySetCell(x, y - 1, Random.bool(.3) ? TYPES.MOLTEN_WAX : TYPES.HONEY);
+		}),
 		[TYPES.BEE]: new Element(2, [new Color("#e8d207"), new Color("#ffe812"), new Color("#f5e764"), new Color("#e6d42c"), new Color("#d1a81f"), new Color("#bd940d")], 0, 0.05, (x, y) => {
 			const angle = Random.angle();
 			const cos = Math.cos(angle);
@@ -1946,8 +1968,8 @@
 	const ELEMENT_COUNT = Object.keys(TYPES).length;
 
 	function typeName(type) {
-		if(type === TYPES.ELECTRICITY) return "Colorado";
-		if(type === TYPES.DDT) return "DDT";
+		if (type === TYPES.ELECTRICITY) return "Colorado";
+		if (type === TYPES.DDT) return "DDT";
 		return Object.entries(TYPES)
 			.find(([k, v]) => v === type)[0]
 			.split("_")
@@ -2026,7 +2048,7 @@
 		}
 	}
 
-SETTINGS.create(20, 20)
+	SETTINGS.create(20, 20)
 
 	if (false) {
 		const x0 = (WIDTH >> 1) - (HEIGHT >> 1);
@@ -2100,21 +2122,21 @@ SETTINGS.create(20, 20)
 					else if (key === "ArrowLeft") lastBrush();
 					else if (key === "ArrowUp") brushSize++;
 					else if (key === "ArrowDown") brushSize = Math.max(brushSize - 1, 1);
-					else if (key === "."){
-						if(brushType + 1 < BRUSH_TYPES.length) brushType++;
+					else if (key === ".") {
+						if (brushType + 1 < BRUSH_TYPES.length) brushType++;
 						else brushType = 0;
 					}
-					else if (key === ","){
-						if(brushType > 0) brushType--;
+					else if (key === ",") {
+						if (brushType > 0) brushType--;
 						else brushType = BRUSH_TYPES.length - 1;
 					}
 					else if (key === "e") {
 						scene.camera.restoreZoom();
 						scene.camera.position = middle;
-					} 
+					}
 					else if (key === "r") {
-						for(let x = 0; x < WIDTH; x++)
-							for(let y = 0; y < HEIGHT; y++)
+						for (let x = 0; x < WIDTH; x++)
+							for (let y = 0; y < HEIGHT; y++)
 								Element.setCell(x, y, TYPES.AIR);
 					}
 				} else {
@@ -2152,8 +2174,8 @@ SETTINGS.create(20, 20)
 					const r = brushSize;
 					const { screen, world } = touches.get(touch);
 
-					
-					const hovered = scene.main.sceneObjectArray.filter(el => el.collidePoint(screen)).length;
+
+					const hovered = scene.main.sceneObjectArray.filter(el => !el.hidden && el.collidePoint(screen)).length;
 					if (hovered) continue;
 
 					const { x: ox, y: oy } = Vector2.floor(world.over(CELL));
@@ -2162,17 +2184,17 @@ SETTINGS.create(20, 20)
 						explode(ox, oy, r);
 					else if (brush === TYPES.ENDOTHERMIA)
 						explode(ox, oy, r);
-					else if (brush === TYPES.EXOTHERMIA){
+					else if (brush === TYPES.EXOTHERMIA) {
 						for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 							if (i * i + j * j < r * r) {
 								const x = i + ox;
 								const y = j + oy;
-								if(inBounds(x, y)) Element.tryBurn(x, y, TYPES.FIRE);
+								if (inBounds(x, y)) Element.tryBurn(x, y, TYPES.FIRE);
 							}
 						}
 					}
-					else{
-						if(brushType == 0){
+					else {
+						if (brushType == 0) {
 							for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 								if (i * i + j * j < r * r) {
 									const x = i + ox;
@@ -2182,18 +2204,18 @@ SETTINGS.create(20, 20)
 								}
 							}
 						}
-						else if(brushType == 1){
+						else if (brushType == 1) {
 							let or = r - 1;
 							for (let i = -or; i <= or; i++) for (let j = -or; j <= or; j++) {
 								const x = i + ox;
 								const y = j + oy;
 								if (inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
-										Element.setCell(x, y, brush);
+									Element.setCell(x, y, brush);
 							}
 						}
-						else if(brushType == 2){
+						else if (brushType == 2) {
 							for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
-								if (i * i + j * j < r * r && i * i + j * j >= (r-1) * (r-1)) {
+								if (i * i + j * j < r * r && i * i + j * j >= (r - 1) * (r - 1)) {
 									const x = i + ox;
 									const y = j + oy;
 									if (inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
@@ -2201,19 +2223,19 @@ SETTINGS.create(20, 20)
 								}
 							}
 						}
-						else if(brushType == 3){
+						else if (brushType == 3) {
 							for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 								if (i * i + j * j < r * r) {
 									const x = i + ox;
 									const y = j + oy;
 									if (inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
 										Element.setCell(x, y, brush);
-										explode(x, y, 1);
+									explode(x, y, 1);
 								}
 							}
 						}
-						else if(brushType == 4){
-							for (let i = 0; i <= WIDTH; i++) for (let j = -(r-1); j <= (r-1); j++) {
+						else if (brushType == 4) {
+							for (let i = 0; i <= WIDTH; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
 								const x = i;
 								const y = j + oy;
 								if (inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
@@ -2294,7 +2316,6 @@ SETTINGS.create(20, 20)
 				lastIds[i][j] = grid[i][j].id;
 
 			scene.camera.drawInWorldSpace(() => {
-
 				renderer.fill(Color.BLACK);
 				if (RTX) {
 					const image = rays({
@@ -2306,38 +2327,39 @@ SETTINGS.create(20, 20)
 				} else {
 					renderer.image(tex).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
 				}
-
-				if (keyboard.pressed("v")) {
-					if (!debugFrame)
-						debugFrame = new FastFrame(width, height);
-
-					debugFrame.renderer.transform = renderer.transform;
-
-					for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
-						const chunk = chunks[i][j];
-
-						if (chunk.sleep && chunk.sleepNext)
-							continue;
-
-						const cx = chunk.x * CHUNK;
-						const cy = chunk.y * CHUNK;
-						for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
-							const x = cx + i;
-							const y = cy + j;
-							if (x >= WIDTH || y >= HEIGHT)
-								continue;
-							const cell = grid[x][y];
-							if (cell.vel.sqrMag) {
-								debugFrame.renderer.stroke(Color.RED).arrow(x * CELL, y * CELL, x * CELL + cell.vel.x * CELL, y * CELL + cell.vel.y * CELL);
-							}
-						}
-
-						debugFrame.renderer.stroke(Color.RED).rect(i * CHUNK * CELL, j * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
-					}
-					renderer.image(debugFrame).default(0, 0);
-					debugFrame.renderer.clear();
-				}
 			});
+
+			if (keyboard.pressed("v")) {
+				if (!debugFrame)
+					debugFrame = new FastFrame(width, height);
+
+				debugFrame.renderer.transform = scene.camera;
+
+				for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+					const chunk = chunks[i][j];
+
+					if (chunk.sleep && chunk.sleepNext)
+						continue;
+
+					const cx = chunk.x * CHUNK;
+					const cy = chunk.y * CHUNK;
+					for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
+						const x = cx + i;
+						const y = cy + j;
+						if (x >= WIDTH || y >= HEIGHT)
+							continue;
+						const cell = grid[x][y];
+						if (cell.vel.sqrMag) {
+							debugFrame.renderer.stroke(Color.RED).arrow(x * CELL, y * CELL, x * CELL + cell.vel.x * CELL, y * CELL + cell.vel.y * CELL);
+						}
+					}
+
+					debugFrame.renderer.stroke(Color.RED).rect(i * CHUNK * CELL, j * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
+				}
+				
+				renderer.image(debugFrame).default(0, 0);
+				debugFrame.renderer.clear();
+			}
 
 			if (!paused) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
 				const chunk = chunks[i][j];

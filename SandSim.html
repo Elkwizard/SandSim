@@ -136,7 +136,7 @@
 
 				// hdr = 1.0 / (1.0 + exp(-5.0 * (hdr - 0.5)));
 				// hdr = ACESFilm(hdr);
-
+				
 				return vec4(hdr, 1.0);
 			}
 		`);
@@ -169,6 +169,8 @@
 			return godRays;
 		};
 	};
+
+	canvas.clearScreen = () => renderer.fill(Color.BLACK);
 
 	let x = -7;
 	let a = -2;
@@ -436,6 +438,7 @@
 		static dereference(x, y) {
 			const cell = grid[x][y];
 			cell.id = cell.reference;
+			cell.reference = 0;
 			this.updateCell(x, y);
 		}
 
@@ -488,6 +491,28 @@
 			return Element.isType(x, y, element) &&
 				Element.isType(x + 1, y, element) &&
 				Element.isType(x - 1, y, element);
+		}
+
+		// [7] [0] [1]
+		// [6] [ ] [2]
+		// [5] [4] [3]
+		// returns true if all neighbors are "element," returns false otherwise
+		static check(x, y, element = TYPES.AIR, neighbors = [0]) {
+			for (let i = 0; i < neighbors.length; i++) {
+				if (neighbors[i] < 0 || neighbors[i] > 7) throw `"${neighbors[i]}" is not an accepted value for the [neighbors] array (must be between 0 and 7, inclusive)`;
+
+				if (neightbors[i] == 0 && !Element.isType(x, y - 1, element)) return false;
+				else if (neightbors[i] == 1 && !Element.isType(x + 1, y - 1, element)) return false;
+				else if (neightbors[i] == 2 && !Element.isType(x + 1, y, element)) return false;
+				else if (neightbors[i] == 3 && !Element.isType(x + 1, y + 1, element)) return false;
+				else if (neightbors[i] == 4 && !Element.isType(x, y + 1, element)) return false;
+				else if (neightbors[i] == 5 && !Element.isType(x - 1, y + 1, element)) return false;
+				else if (neightbors[i] == 6 && !Element.isType(x - 1, y, element)) return false;
+				else if (neightbors[i] == 7 && !Element.isType(x - 1, y - 1, element)) return false;
+				else throw "ball";
+			}
+
+			return true;
 		}
 
 		static move(x, y, fx, fy) {
@@ -593,7 +618,7 @@
 	const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASS_THROUGH, TYPES.AIR, TYPES.PARTICLE]);
 	const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 	const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
-	const CONDUCTIVE = new Set([TYPES.COPPER, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, ...WATER_TYPES]);
+	const CONDUCTIVE = new Set([TYPES.GENDERFLUID, TYPES.COPPER, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, ...WATER_TYPES]);
 	const ELECTRICITY_PASSTHROUGH = new Set([...CONDUCTIVE, TYPES.ELECTRICITY]);
 	const SUGARY = new Set([TYPES.SUGAR, TYPES.HONEY]);
 	const COLD = new Set([...WATER_TYPES, TYPES.ICE]);
@@ -710,6 +735,14 @@
 		}
 	};
 
+	function beeUpdate(x, y, passthrough) {
+		const angle = Random.angle();
+		const cos = Math.cos(angle);
+		const sin = Math.sin(angle);
+		if (!Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin), passthrough))
+			Element.updateCell(x, y);
+	}
+
 	function makeCircle(x, y, id, r = 10, chance = 0.2, passthrough = undefined) {
 		let ox = x;
 		let oy = y;
@@ -817,18 +850,7 @@
 
 		[TYPES.ENDOTHERMIA]: new Element(1, Color.BLUE),
 
-		[TYPES.EXOTHERMIA]: new Element(1, (x, y) => {
-			if (y == 0) return new Color("#b5193b")
-			else if (y == 1) return new Color("#b52619")
-			else if (y == 2) return new Color("#b33b30")
-			else if (y == 3) return new Color("#bf5e3b")
-			else if (y == 4) return new Color("#c9904b")
-			else if (y == 5) return new Color("#cca85c")
-			else if (y == 6) return new Color("#e0cc72")
-			else if (y == 7) return new Color("#e8e280")
-			else if (y == 8) return new Color("#f5f09a");
-			else return new Color("#d7f8fa");
-		}),
+		[TYPES.EXOTHERMIA]: new Element(1, Color.RED),
 
 		[TYPES.PRIDIUM]: new Element(1, flag([
 			0xD8097E,
@@ -855,8 +877,11 @@
 			0xA3A3A3,
 			0xFFFFFF,
 			0x800080,
-		]), 0, 1),
-		[TYPES.GENDERFLUID]: new Element(0, genderfluidFlag, 0, 0, liquidUpdate),
+		]), 0, 0),
+		[TYPES.GENDERFLUID]: new Element(0, genderfluidFlag, 0, 0.001, liquidUpdate, (x, y) => {
+			Element.setCell(x, y, TYPES.BEE);
+			return true;
+		}),
 
 		[TYPES.STEEL]: new Element(1, (x, y) => {
 			let color;
@@ -1670,34 +1695,17 @@
 			if (Random.bool(.7)) Element.trySetCell(x, y - 1, TYPES.SMOKE);
 			Element.trySetCell(x, y - 1, Random.bool(.3) ? TYPES.MOLTEN_WAX : TYPES.HONEY);
 		}),
-		[TYPES.BEE]: new Element(2, [new Color("#e8d207"), new Color("#ffe812"), new Color("#f5e764"), new Color("#e6d42c"), new Color("#d1a81f"), new Color("#bd940d")], 0, 0.05, (x, y) => {
-			const angle = Random.angle();
-			const cos = Math.cos(angle);
-			const sin = Math.sin(angle);
-			if (!Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin), LIQUID_PASS_THROUGH))
-				Element.updateCell(x, y);
-		}, (x, y) => {
+		[TYPES.BEE]: new Element(2, [new Color("#e8d207"), new Color("#ffe812"), new Color("#f5e764"), new Color("#e6d42c"), new Color("#d1a81f"), new Color("#bd940d")], 0, 0.05, (x, y) => beeUpdate(x, y, LIQUID_PASS_THROUGH), (x, y) => {
 			makeCircle(x, y - 1, TYPES.HONEY, 2);
 			explode(x, y - 1, 2);
 		}),
 
-		[TYPES.ANT]: new Element(2, [new Color("red")], 0, 0.05, (x, y) => {			
-			if(Element.isType(x, y - 1, TYPES.AIR)
-			&& Element.isType(x + 1, y - 1, TYPES.AIR)
-			&& Element.isType(x - 1, y - 1, TYPES.AIR)
-			&& Element.isType(x, y + 1, TYPES.AIR)
-			&& Element.isType(x + 1, y + 1, TYPES.AIR)
-			&& Element.isType(x - 1, y + 1, TYPES.AIR)
-			&& Element.isType(x + 1, y, TYPES.AIR)
-			&& Element.isType(x - 1, y + 1, TYPES.AIR)
-			) solidUpdate(x, y);
-			else{
-				let d = Random.bool() ? -1 : 1;
-				if(Element.isType(x + d, y, TYPES.AIR)) Element.move(x, y, x + d, y);
-				else if(Element.isType(x + d, y - 1, TYPES.AIR)) Element.move(x, y, x + d, y - 1);
-				else if(Element.isType(x, y - 1, TYPES.AIR) && (!Element.isType(x - 1, y - 1, TYPES.AIR) || !Element.isType(x + 1, y - 1, TYPES.AIR))) Element.move(x, y, x, y - 1);
-				else Element.updateCell(x, y);
+		[TYPES.ANT]: new Element(2, [new Color("red")], 0, 0.05, (x, y) => {
+			if (!solidUpdate(x, y)) {
+				if (!Element.tryMove(x, y, x + (Random.bool() ? -1 : 1), y, LIQUID_PASS_THROUGH))
+					Element.updateCell(x, y);
 			}
+
 
 		}, (x, y) => {
 			makeCircle(x, y - 1, TYPES.SALT, 2);
@@ -2290,9 +2298,7 @@
 
 				while (Element.toWake.length)
 					processChunk(Element.toWake.pop());
-
 			}
-
 
 			for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
 				const chunk = chunks[i][j];
@@ -2307,7 +2313,7 @@
 					if (x >= WIDTH || y >= HEIGHT)
 						continue;
 					const cell = grid[x][y];
-					if (cell.id != lastIds[x][y])
+					if (cell.id !== lastIds[x][y])
 						tex.setPixel(x, y, DATA[cell.id].getColor(x, y));
 				}
 			}
@@ -2316,7 +2322,6 @@
 				lastIds[i][j] = grid[i][j].id;
 
 			scene.camera.drawInWorldSpace(() => {
-				renderer.fill(Color.BLACK);
 				if (RTX) {
 					const image = rays({
 						direction: new Vector2(-1, 1),

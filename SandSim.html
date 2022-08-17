@@ -2155,7 +2155,8 @@
 				const tx = ~~Random.normalZ(x, sd);
 				const ty = ~~Random.normalZ(y, sd);
 				if (Element.inBounds(tx, ty) && !Element.isTypes(tx, ty, RADIATION_RESISTANT) && Random.bool(0.2)) {
-					Element.setCellId(tx, ty, (grid[tx][ty].id - 1 + ELEMENT_COUNT) % ELEMENT_COUNT);
+					const change = Random.bool() ? -1 : 1;
+					Element.setCellId(tx, ty, (grid[tx][ty].id + change + ELEMENT_COUNT) % ELEMENT_COUNT);
 				} else Element.updateCell(x, y);
 			}),
 			[TYPES.LIGHTNING]: new Element(80, [new Color(100, 100, 200), Color.WHITE], 0.01, 0, (x, y) => {

@@ -237,7 +237,7 @@
 			"PRIDIUM", "GENDERFLUID",
 			"PARTICLE",
 			"EXOTHERMIA", "FIRE", "BLUE_FIRE",
-			"BAHHUM", 
+			// "BAHHUM", 
 			"ESTIUM", "ESTIUM_GAS",
 			"DDT", "ANT", "BEE", "HIVE", "HONEY", "SUGAR",
 			"WATER", "ICE", "SALT", "SALT_WATER",
@@ -691,7 +691,7 @@
 		const SOIL_TYPES = new Set([TYPES.DAMP_SOIL, TYPES.SOIL]);
 		const GRASS_ROOTABLE = new Set([...SOIL_TYPES, ...WATER_TYPES]);
 		const CONVEYOR_RESISTANT = new Set([TYPES.CONVEYOR_LEFT, TYPES.CONVEYOR_RIGHT, TYPES.CONDENSED_STONE]);
-		const RADIATION_RESISTANT = new Set([TYPES.RADIUM, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.CONDENSED_STONE]);
+		const RADIATION_RESISTANT = new Set([TYPES.AIR, TYPES.RADIUM, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.CONDENSED_STONE]);
 
 		const genderfluidFlag = flag([
 			"#FF76A401",
@@ -843,10 +843,9 @@
 			const line = new Line(x, y, x1, y1);
 			for (let i = minX; i <= maxX; i++) for (let j = minY; j <= maxY; j++) {
 				const p = new Vector2(i, j);
-				if (line.distanceTo(p) < r) {
+				if (Element.inBounds(i, j) && line.distanceTo(p) < r) {
 					Element.setCell(i, j, id);
 				}
-
 			}
 		}
 
@@ -927,16 +926,18 @@
 			[TYPES.ENDOTHERMIA]: new Element(1, Color.BLUE),
 
 			[TYPES.EXOTHERMIA]: new Element(1, (x, y) => {
-				if (y == 0) return new Color("#b5193b")
-				else if (y == 1) return new Color("#b52619")
-				else if (y == 2) return new Color("#b33b30")
-				else if (y == 3) return new Color("#bf5e3b")
-				else if (y == 4) return new Color("#c9904b")
-				else if (y == 5) return new Color("#cca85c")
-				else if (y == 6) return new Color("#e0cc72")
-				else if (y == 7) return new Color("#e8e280")
+				if (y == 0) return new Color("#b5193b");
+				else if (y == 1) return new Color("#b52619");
+				else if (y == 2) return new Color("#b33b30");
+				else if (y == 3) return new Color("#bf5e3b");
+				else if (y == 4) return new Color("#c9904b");
+				else if (y == 5) return new Color("#cca85c");
+				else if (y == 6) return new Color("#e0cc72");
+				else if (y == 7) return new Color("#e8e280");
 				else if (y == 8) return new Color("#f5f09a");
 				else return new Color("#d7f8fa");
+			}, 0, 0, (x, y) => {
+				Element.die(x, y);
 			}),
 
 			[TYPES.BLOOD]: new Element(1, freqColoring([
@@ -2134,8 +2135,9 @@
 				const tx = ~~Random.normalZ(x, sd);
 				const ty = ~~Random.normalZ(y, sd);
 				if (Element.inBounds(tx, ty)) {
-					if (!Element.isTypes(tx, ty, RADIATION_RESISTANT) && Random.bool(0.2)) Element.die(tx, ty);
-					else Element.updateCell(tx, ty);
+					if (!Element.isTypes(tx, ty, RADIATION_RESISTANT) && Random.bool(0.2)) {
+						Element.setCellId(tx, ty, (grid[tx][ty].id - 1 + ELEMENT_COUNT) % ELEMENT_COUNT);
+					} else Element.updateCell(tx, ty);
 				}
 			}),
 			[TYPES.LIGHTNING]: new Element(80, [new Color(100, 100, 200), Color.WHITE], 0.01, 0, (x, y) => {

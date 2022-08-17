@@ -256,7 +256,7 @@
 			"BLOOD", "MUSCLE"
 		].map((n, i) => [n, i]));
 
-		const CELL = 4;
+		const CELL = 3;
 
 		class Cell {
 			constructor(id) {
@@ -951,18 +951,30 @@
 				return true;
 			}),
 
-			[TYPES.MUSCLE]: new Element(1, freqColoring([
-				["#5c0404", 30],
-				["#660b17", 20],
-				["#540c04", 15],
-				["#5e0e08", 15]
-			]), 0.46, 0.02, (x, y) => { }, (x, y) => {
+			[TYPES.MUSCLE]: new Element(1, (x, y) => {
+				const color = new Color("#5c040401");
+				const layer = (x, y) => {
+					const angle = Math.PI / 2;
+					const c = Math.cos(angle);
+					const s = Math.sin(angle);
+					[x, y] = [x * c - y * s, x * s + y * c];
+					y += Random.perlin(x, 5) * 3;
+					const p = Random.voronoi2D(x, y, 0.5);
+					return Color.colorScale(color, (1 - p) * 0.5 + 0.5);
+				};
+				return layer(x, y);
+			},
+			// freqColoring([
+			// 	["#5c0404", 30],
+			// 	["#660b17", 20],
+			// 	["#540c04", 15],
+			// 	["#5e0e08", 15]
+			// ]),
+			0.46, 0.02, (x, y) => { }, (x, y) => {
 				Element.trySetCell(x, y - 1, Random.bool(.6) ? TYPES.BLOOD : Random.bool() ? TYPES.STEAM : TYPES.SMOKE);
-				const fadeOut = 100;
-				// synth.play({ duration: 1000, volume: 1, frequency: 1000, wave: "triangle", fadeOut });
-				synth.play({ duration: 1000, volume: 1, frequency: 1000, wave: "sine", fadeOut });
-				synth.play({ duration: 1000, volume: 1, frequency: 800, wave: "sine", fadeOut });
-				// synth.play({ duration: 1000, volume: 1, frequency: 900, wave: "square", fadeOut });
+				// const fadeOut = 100;
+				// synth.play({ duration: 1000, volume: 1, frequency: 1000, wave: "sine", fadeOut });
+				// synth.play({ duration: 1000, volume: 1, frequency: 800, wave: "sine", fadeOut });
 			}),
 
 			[TYPES.ASH]: new Element(1, freqColoring([

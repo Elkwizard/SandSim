@@ -251,7 +251,7 @@
 			"COPPER", "LIQUID_COPPER",
 			"LEAD", "LIQUID_LEAD",
 			"IRON", "LIQUID_IRON", "RUST",
-			"MERCURY",
+			"MERCURY", "RADIUM",
 			"LIGHTNING", "LIGHT",
 			"BLOOD", "MUSCLE"
 		].map((n, i) => [n, i]));
@@ -691,6 +691,7 @@
 		const SOIL_TYPES = new Set([TYPES.DAMP_SOIL, TYPES.SOIL]);
 		const GRASS_ROOTABLE = new Set([...SOIL_TYPES, ...WATER_TYPES]);
 		const CONVEYOR_RESISTANT = new Set([TYPES.CONVEYOR_LEFT, TYPES.CONVEYOR_RIGHT, TYPES.CONDENSED_STONE]);
+		const RADIATION_RESISTANT = new Set([TYPES.RADIUM, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.CONDENSED_STONE]);
 
 		const genderfluidFlag = flag([
 			"#FF76A401",
@@ -698,6 +699,13 @@
 			"#C011D701",
 			"#00000001",
 			"#2F3CBE01",
+		]);
+
+		const RADIUM_COLORS = freqColoring([
+			["#886e9901", 10],
+			["#64705001", 30],
+			["#80827d10", 30],
+			["#c8ccc225", 2]
 		]);
 
 		const fluidUpdate = (x, y, direction, accel, passthrough) => {
@@ -2115,6 +2123,20 @@
 			[TYPES.CLAY]: new Element(1, [new Color("#9c8b79"), new Color("#a8987d")], 0.4, 0.2, solidUpdate, (x, y) => {
 				Element.setCell(x, y, TYPES.BRICK);
 				return true;
+			}),
+			[TYPES.RADIUM]: new Element(1, (x, y) => {
+				const f = Math.sin(20 * Random.perlin2D(x, y, 0.5)) * 0.5 + 0.5;
+				const color = RADIUM_COLORS[~~(RADIUM_COLORS.length * f)];
+				return color;
+			}, 0.05, 0, (x, y) => {
+				solidUpdate(x, y);
+				const sd = 10;
+				const tx = ~~Random.normalZ(x, sd);
+				const ty = ~~Random.normalZ(y, sd);
+				if (Element.inBounds(tx, ty)) {
+					if (!Element.isTypes(tx, ty, RADIATION_RESISTANT) && Random.bool(0.2)) Element.die(tx, ty);
+					else Element.updateCell(tx, ty);
+				}
 			}),
 			[TYPES.LIGHTNING]: new Element(80, [new Color(100, 100, 200), Color.WHITE], 0.01, 0, (x, y) => {
 				const cell = grid[x][y];

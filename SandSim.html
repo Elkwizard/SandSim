@@ -684,12 +684,12 @@
 		const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 		const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
 		const ANT_UNSTICKABLE = new Set([TYPES.GENDERFLUID, TYPES.COPPER, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.IRON, TYPES.LIQUID_IRON, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.MUSCLE, ...WATER_TYPES]);
-		const CONDUCTIVE = new Set([TYPES.GENDERFLUID, TYPES.COPPER, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, ...WATER_TYPES]);
+		const CONDUCTIVE = new Set([TYPES.GENDERFLUID, TYPES.COPPER, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.IRON, TYPES.MUSCLE, ...WATER_TYPES]);
 		const ELECTRICITY_PASSTHROUGH = new Set([...CONDUCTIVE, TYPES.ELECTRICITY]);
 		const SUGARY = new Set([TYPES.SUGAR, TYPES.HONEY]);
 		const COLD = new Set([...WATER_TYPES, TYPES.ICE, TYPES.BLOOD, TYPES.ESTIUM, TYPES.HONEY]);
 		const SOIL_TYPES = new Set([TYPES.DAMP_SOIL, TYPES.SOIL]);
-		const GRASS_ROOTABLE = new Set([...SOIL_TYPES, ...WATER_TYPES])
+		const GRASS_ROOTABLE = new Set([...SOIL_TYPES, ...WATER_TYPES]);
 		const CONVEYOR_RESISTANT = new Set([TYPES.CONVEYOR_LEFT, TYPES.CONVEYOR_RIGHT, TYPES.CONDENSED_STONE]);
 
 		const genderfluidFlag = flag([
@@ -2585,26 +2585,37 @@
 							ambient: new Color(200, 200, 200)
 						})
 						renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
-					}
-					// else 
-					// if (RTX&& lightSources.length > 0){// && lightSources.length > 0) {
-					// 	const image = rays({
-					// 		direction: new Vector2(100000, -100000),//lightSources[0][0], lightSources[0][1]),
-					// 		color: new Color(105, 105, 50),
-					// 		ambient: new Color(200, 200, 200)
-					// 	})
-					// 	const image2 = rays({
-					// 		direction: new Vector2(lightSources[0][0], lightSources[0][1]),
-					// 		color: new Color(105, 105, 50),
-					// 		ambient: new Color(200, 200, 200)
-					// 	})
-					// 	//alert(lightSources[0][1])
-					// 	//alert(image.image)
-					// 	renderer.image(image2).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
-					// } 
-
-					else {
+					} else {
 						renderer.image(tex).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
+					}
+
+					// brush previews
+					const brushPreviewArgs = [Color.LIME, 1 / scene.camera.zoom];
+					const cellBrushSize = brushSize * CELL;
+					switch (BRUSH_TYPES[brushType]) {
+						case "Circle":
+							renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize);
+							break;
+						case "Square":
+							renderer.stroke(...brushPreviewArgs).rect(Rect.fromMinMax(mouse.world.minus(cellBrushSize), mouse.world.plus(cellBrushSize)));
+							break;
+						case "Ring":
+							renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize);
+							renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize - CELL);
+							break;
+						case "Forceful": {
+							renderer.stroke(...brushPreviewArgs).shape(new Polygon(Polygon.regular(24, cellBrushSize).vertices.map((v, i) => i % 2 ? v.times(1.3) : v)).move(mouse.world));
+						}; break;
+						case "Row":
+							renderer.stroke(...brushPreviewArgs).rect(0, mouse.world.y - cellBrushSize, WIDTH * CELL, cellBrushSize * 2);
+							break;
+						case "Column":
+							renderer.stroke(...brushPreviewArgs).rect(mouse.world.x - cellBrushSize, 0, cellBrushSize * 2, HEIGHT * CELL);
+							break;
+						case "EraseOnly":
+							renderer.stroke(Color.RED, ...brushPreviewArgs.slice(1)).circle(mouse.world, cellBrushSize);
+							break;
+						
 					}
 				});
 

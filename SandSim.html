@@ -237,7 +237,7 @@
 			"PRIDIUM", "GENDERFLUID",
 			"PARTICLE",
 			"EXOTHERMIA", "FIRE", "BLUE_FIRE",
-			// "BAHHUM", 
+			 "BAHHUM", 
 			"ESTIUM", "ESTIUM_GAS",
 			"DDT", "ANT", "BEE", "HIVE", "HONEY", "SUGAR",
 			"WATER", "ICE", "SALT", "SALT_WATER",
@@ -251,9 +251,10 @@
 			"COPPER", "LIQUID_COPPER",
 			"LEAD", "LIQUID_LEAD",
 			"IRON", "LIQUID_IRON", "RUST",
-			"MERCURY", "RADIUM",
+			"MERCURY", 
+			"RADIUM", "ACTINIUM",
 			"LIGHTNING", "LIGHT",
-			"BLOOD", "MUSCLE"
+			"BLOOD", "MUSCLE", "BONE", "EPIDERMIS", "INACTIVE_NEURON", "ACTIVE_NEURON", "CEREBRUM"
 		].map((n, i) => [n, i]));
 
 		const CELL = 3;
@@ -334,7 +335,7 @@
 				if (this.multipleColors) return Random.choice(this.color);
 				return this.color;
 			}
-
+Element
 			burn(x, y, fireType, burn = false) {
 				if (burn || Random.bool(this.flammability)) {
 					if (!this.onburn(x, y)) Element.setCell(x, y, fireType);
@@ -364,10 +365,14 @@
 			}
 
 			static react(x, y, reactant, product, chance = 1) {
-				this.affectAllNeighbors(x, y, (x, y) => {
-					if (Element.isType(x, y, reactant) && Random.bool(chance))
-						Element.setCell(x, y, product);
+				let reacted = false;
+				this.affectAllNeighbors(x, y, (ox, oy) => {
+					if (Element.isType(ox, oy, reactant) && Random.bool(chance)) {
+						Element.setCell(ox, oy, product);
+						reacted = true;
+					}
 				});
+				return reacted;
 			}
 
 			static consumeReact(x, y, reactant, product, chance = 1) {
@@ -396,10 +401,14 @@
 			}
 
 			static reactMany(x, y, reactant, product, chance = 1) {
-				this.affectAllNeighbors(x, y, (x, y) => {
-					if (Element.isTypes(x, y, reactant) && Random.bool(chance))
+				let reacted = false;
+				this.affectAllNeighbors(x, y, (ox, oy) => {
+					if (Element.isTypes(ox, oy, reactant) && Random.bool(chance)) {
 						Element.setCell(x, y, product);
+						reacted = true;
+					}
 				});
+				return reacted;
 			}
 
 			static consumeReactMany(x, y, reactant, product, chance = 1) {
@@ -691,7 +700,10 @@
 		const SOIL_TYPES = new Set([TYPES.DAMP_SOIL, TYPES.SOIL]);
 		const GRASS_ROOTABLE = new Set([...SOIL_TYPES, ...WATER_TYPES]);
 		const CONVEYOR_RESISTANT = new Set([TYPES.CONVEYOR_LEFT, TYPES.CONVEYOR_RIGHT, TYPES.CONDENSED_STONE]);
-		const RADIATION_RESISTANT = new Set([TYPES.AIR, TYPES.RADIUM, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.CONDENSED_STONE]);
+		const RADIATION_RESISTANT = new Set([TYPES.AIR, TYPES.RADIUM, TYPES.ACTINIUM, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.CONDENSED_STONE]);
+		const NEURON = new Set([TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON])
+		const BRAIN = new Set([...NEURON, TYPES.CEREBRUM])
+		const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD, TYPES.BONE])
 
 		const genderfluidFlag = flag([
 			"#FF76A401",
@@ -970,11 +982,99 @@
 			// 	["#540c04", 15],
 			// 	["#5e0e08", 15]
 			// ]),
-			0.46, 0.02, (x, y) => { }, (x, y) => {
+			0.46, 0.02, (x, y) => {
+				Element.react(x, y, TYPES.AIR, TYPES.EPIDERMIS, .8);
+
+				if ((Random.bool(Random.perlin2D(x, y, 100) / 200))) Element.react(x, y, TYPES.EPIDERMIS, TYPES.MUSCLE)
+				else if (Element.isType(x, y - 1, TYPES.EPIDERMIS) || Element.isType(x, y + 1, TYPES.EPIDERMIS) || Element.isType(x - 1, y, TYPES.EPIDERMIS) || Element.isType(x + 1, y, TYPES.EPIDERMIS)) Element.updateCell(x, y);
+			}, (x, y) => {
 				Element.trySetCell(x, y - 1, Random.bool(.6) ? TYPES.BLOOD : Random.bool() ? TYPES.STEAM : TYPES.SMOKE);
 				// const fadeOut = 100;
 				// synth.play({ duration: 1000, volume: 1, frequency: 1000, wave: "sine", fadeOut });
 				// synth.play({ duration: 1000, volume: 1, frequency: 800, wave: "sine", fadeOut });
+			}),
+
+			[TYPES.INACTIVE_NEURON]: new Element(3, new Color("#1b1a47"), 0.4, 0.01, (x, y) => {
+				let nearbyNeurons = 0;
+				let nearbyNeurons1 = 0;
+				let moveChoices = [];
+
+				Element.affectNeighbors(x, y, (ox, oy) => {
+					if(Element.isTypes(ox, oy, NEURON)) nearbyNeurons++;
+					if(Element.isType(ox, oy, TYPES.MUSCLE)) moveChoices.push([ox, oy]);
+				})
+
+				let choice;
+				if(moveChoices.length > 0){
+					choice = Random.choice(moveChoices);
+
+					Element.affectNeighbors(choice[0], choice[1], (ox, oy) => {
+						if(Element.isTypes(ox, oy, NEURON)) nearbyNeurons1++;
+					})
+
+					if(Random.bool(.022) && nearbyNeurons < 2 && nearbyNeurons1 == 1){
+						Element.setCell(choice[0], choice[1], TYPES.INACTIVE_NEURON)
+					} else Element.updateCell(x, y)
+
+				}
+				else Element.updateCell(x, y)
+			}, (x, y) => {
+				Element.setCell(TYPES.WATER);
+				return true;
+			}),
+
+			[TYPES.ACTIVE_NEURON]: new Element(150, new Color("#1b1a47"), 0.4, 0.08, (x, y) => {
+				let strength = 2;
+
+				if(grid[x][y].acts == 0 && Element.isType(x, y, TYPES.ACTIVE_NEURON)) Element.react(x, y, TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON); 
+				if(grid[x][y].acts == strength) Element.setCell(x, y, TYPES.INACTIVE_NEURON);
+				else grid[x][y].acts++;
+				
+				Element.updateCell(x, y);
+			}, (x, y) => {
+				Element.setCell(TYPES.STEAM);
+				return true;
+			}),
+
+			[TYPES.CEREBRUM]: new Element(3, (x, y) => {
+				p = Random.voronoi2D(x * .5, y, 0.2);
+				if (p < .2) return new Color(Random.bool() ? "#a8324801" : "#ad396601");
+				else return new Color(Random.bool() ? "#8f293c01" : "#8c272701")
+			}, 0.4, 0.01, (x, y) => {
+				Element.react(x, y, TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON, .0002);
+
+				Element.affectNeighbors(x, y, (ox, oy) => {
+					if(Element.isType(ox, oy, TYPES.BONE) && grid[ox][oy].acts == 2 && Random.bool(.001)) {
+						Element.react(ox, oy, TYPES.BONE, TYPES.INACTIVE_NEURON)
+					}
+				})
+				if(Element.consumeReact(x, y, TYPES.AIR, TYPES.BONE)) grid[x][y].acts = (Random.bool(.08) ? 2 : 1);
+				Element.updateCell(x, y)
+			}, (x, y) => {
+				Element.setCell(TYPES.WATER);
+				return true;
+			}),
+
+			[TYPES.EPIDERMIS]: new Element(1, new Color("#8f6863"), .47, .03, (x, y) => {
+				let m = 0;
+				Element.affectNeighbors(x, y, (ox, oy) => {
+					if(Element.isTypes(ox, oy, MEATY)) m++;
+				})
+				if(m > 7) Element.setCell(x, y, TYPES.MUSCLE);
+			}, (x, y) => {
+				Element.trySetCell(x, y - 1, Random.bool(.6) ? TYPES.BLOOD : Random.bool() ? TYPES.STEAM : TYPES.SMOKE);	
+			}),
+
+			[TYPES.BONE]: new Element(1, [new Color("#fcf3f2"), new Color("#fce1de")], .7, 0, (x, y) => {
+				if(grid[x][y].acts !== 0){
+					let m = 0;
+					Element.affectNeighbors(x, y, (ox, oy) => {
+						if(Element.isTypes(ox, oy, new Set([...BRAIN, TYPES.BONE]))) m++;
+					})
+					if(m > 7) Element.setCell(x, y, TYPES.CEREBRUM);
+
+					Element.react(x, y, TYPES.AIR, TYPES.MUSCLE, .01);
+				}
 			}),
 
 			[TYPES.ASH]: new Element(1, freqColoring([
@@ -1550,7 +1650,7 @@
 				// return Color.lerp(new Color("#a8f0bb01"), new Color("#d1f0d900"), p)
 
 			}, 0.1, 0.3, (x, y) => {
-				if ((Random.bool(Random.perlin2D(x, y, .03)) / 10)) Element.react(x, y, TYPES.AIR, TYPES.BAHHUM);
+				if ((Random.bool(Random.perlin2D(x, y, .03)))) Element.react(x, y, TYPES.AIR, TYPES.BAHHUM);
 				else if (Random.bool(.01)) Element.react(x, y, TYPES.AIR, TYPES.BAHHUM);
 				else if (Element.isType(x, y - 1, TYPES.AIR) || Element.isType(x, y + 1, TYPES.AIR) || Element.isType(x - 1, y, TYPES.AIR) || Element.isType(x + 1, y, TYPES.AIR)) Element.updateCell(x, y);
 
@@ -2159,6 +2259,25 @@
 					Element.setCellId(tx, ty, (grid[tx][ty].id + change + ELEMENT_COUNT) % ELEMENT_COUNT);
 				} else Element.updateCell(x, y);
 			}),
+
+			[TYPES.ACTINIUM]: new Element(1, (x, y) => {
+				const p = Random.octave(50, Random.perlin2D, x, y, .1);
+				const p1 = Random.octave(3, Random.perlin2D, x, y, .1);
+				c = Random.choice(freqColoring([["#a7bac401", 40], ["#97a6ad01", 35]]));
+
+				if(p > .5 && p < .53) c = new Color("#5178ad25");
+				else if (p1 < .8 && p1 > .73 && Random.bool(.8)) c = new Color("#8799a101");
+
+				return c;
+			}, 0.35, 0, (x, y) => {
+				const sd = 40;
+				const tx = ~~Random.normalZ(x, sd);
+				const ty = ~~Random.normalZ(y, sd);
+				if (Element.inBounds(tx, ty) && !Element.isTypes(tx, ty, RADIATION_RESISTANT) && Random.bool(0.11)) {
+					Element.setCell(tx, ty, TYPES.AIR);
+				} else Element.updateCell(x, y);
+			}),
+
 			[TYPES.LIGHTNING]: new Element(80, [new Color(100, 100, 200), Color.WHITE], 0.01, 0, (x, y) => {
 				const cell = grid[x][y];
 				if (cell.acts === -1) {

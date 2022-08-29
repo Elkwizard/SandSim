@@ -237,7 +237,7 @@
 			"PRIDIUM", "GENDERFLUID",
 			"PARTICLE",
 			"EXOTHERMIA", "FIRE", "BLUE_FIRE",
-			 "BAHHUM", 
+			// "BAHHUM", 
 			"ESTIUM", "ESTIUM_GAS",
 			"DDT", "ANT", "BEE", "HIVE", "HONEY", "SUGAR",
 			"WATER", "ICE", "SALT", "SALT_WATER",
@@ -1019,7 +1019,7 @@ Element
 				}
 				else Element.updateCell(x, y)
 			}, (x, y) => {
-				Element.setCell(TYPES.WATER);
+				Element.setCell(x, y, TYPES.WATER);
 				return true;
 			}),
 
@@ -1032,7 +1032,7 @@ Element
 				
 				Element.updateCell(x, y);
 			}, (x, y) => {
-				Element.setCell(TYPES.STEAM);
+				Element.setCell(x, y, TYPES.STEAM);
 				return true;
 			}),
 
@@ -1051,7 +1051,7 @@ Element
 				if(Element.consumeReact(x, y, TYPES.AIR, TYPES.BONE)) grid[x][y].acts = (Random.bool(.08) ? 2 : 1);
 				Element.updateCell(x, y)
 			}, (x, y) => {
-				Element.setCell(TYPES.WATER);
+				Element.setCell(x, y, TYPES.WATER);
 				return true;
 			}),
 

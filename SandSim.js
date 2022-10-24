@@ -2481,6 +2481,7 @@ try {
 
 	class TYPE_SELECTOR extends ElementScript {
 		static SIZE = 30;
+		static FONT = new Font(TYPE_SELECTOR.SIZE * 0.6, "sans-serif", true);
 		init(obj, type) {
 			obj.scripts.removeDefault();
 			this.type = type;
@@ -2502,6 +2503,11 @@ try {
 			renderer.clip().infer(shape);
 			renderer.image(this.tex).infer(shape);
 			renderer.unclip();
+			renderer.textMode = TextMode.CENTER_CENTER;
+			const words = this.name.split(" ");
+			
+			const symbol = words.length === 1 ? words[0].slice(0, 2) : words.slice(0, 2).map(word => word[0]).join("");
+			// text(TYPE_SELECTOR.FONT, symbol[0].toUpperCase() + symbol.slice(1).toLowerCase(), 0, 0);
 			const selected = brush === this.type;
 			obj.layer = obj.hovered;
 			renderer.stroke(selected ? Color.YELLOW : Color.WHITE, selected ? 3 : 1).infer(shape);

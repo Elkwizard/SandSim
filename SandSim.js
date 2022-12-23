@@ -1660,7 +1660,23 @@ try {
 		}),
 
 		[TYPES.GOLD]: new Element(1, (x, y) => {
-			return new Color("#ffff0001");
+
+			
+			y *= .1;
+			x *= .1;
+       		y += Random.sampleSeed;
+        	let yt = y % 1;
+
+        	if (yt < 0) yt++;
+		//yt = Interpolation.smooth(yt);
+			y = ~~y;
+			x = ~~x;
+
+			const top = Random.seedRand(x + y * 2000);
+			const bottom = Random.seedRand(x + (y + 1) * 2000);
+
+			return Color.lerp(new Color("#edc96706"), new Color("#d4af3706	"), top * (1 - yt) + bottom * yt);
+			//return new Color("#ffff0001");
 		}, 0.6, 0.001, () => null, (x, y) => {
 			Element.setCell(x, y, TYPES.LIQUID_GOLD);
 			return true;
@@ -2704,6 +2720,14 @@ try {
 
 
 						const { x: ox, y: oy } = Vector2.floor(world.over(CELL));
+						
+						// if(touches.allPressed.length == 1){
+						// 	try{let touch2 = touch1}
+						// 	catch{let touch2 = [ox, oy]}
+						// 	let touch1 = [ox, oy];
+						// 	//alert(touch1)
+						// 	if(Math.hypot(touch2[0] - touch1[0], touch2[1] - touch1[1]) > 20) alert(1)
+						// }
 
 						if (brush === TYPES.PARTICLE)
 							explode(ox, oy, r);

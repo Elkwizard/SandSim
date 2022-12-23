@@ -241,7 +241,7 @@ try {
 		"BAHHUM",
 		"ESTIUM", "ESTIUM_GAS",
 		"DDT", "ANT", "BEE", "HIVE", "HONEY", "SUGAR",
-		"WATER", "ICE", "SALT", "SALT_WATER",
+		"WATER", "ICE", "SNOW", "SALT", "SALT_WATER",
 		"SAND", "KELP", "KELP_TOP", "PNEUMATOCYST",
 		"WOOD", "COAL", "OIL", "FUSE", "ASH",
 		"WAX", "GRAINY_WAX", "MOLTEN_WAX",
@@ -1583,9 +1583,14 @@ try {
 				Element.setCell(x, y, TYPES.WATER);
 		}),
 
-		[TYPES.ICE]: new Element(1, [new Color("#d7e3f5"), new Color("#cadbe8")], 0.5, 0.01, (x, y) => {
+		[TYPES.ICE]: new Element(1, [new Color("#93baed"), new Color("#a4c3eb"), new Color("#c0d4ed"), new Color("#b0caeb")], 0.5, 0.01, (x, y) => {
 
 		}, (x, y) => {
+			Element.setCell(x, y, TYPES.WATER);
+			return true;
+		}),
+
+		[TYPES.SNOW]: new Element(4, [new Color("#cdd0d4"), new Color("#bbd5f0"), new Color("#e1e6eb")], 0.5, 0.2, solidUpdate, (x, y) => {
 			Element.setCell(x, y, TYPES.WATER);
 			return true;
 		}),
@@ -2497,6 +2502,7 @@ try {
 
 	class TYPE_SELECTOR extends ElementScript {
 		static SIZE = 30;
+		static FONT = new Font(TYPE_SELECTOR.SIZE * 0.6, "sans-serif", true);
 		init(obj, type) {
 			obj.scripts.removeDefault();
 			this.type = type;
@@ -2518,6 +2524,11 @@ try {
 			renderer.clip().infer(shape);
 			renderer.image(this.tex).infer(shape);
 			renderer.unclip();
+			renderer.textMode = TextMode.CENTER_CENTER;
+			const words = this.name.split(" ");
+			
+			const symbol = words.length === 1 ? words[0].slice(0, 2) : words.slice(0, 2).map(word => word[0]).join("");
+			// text(TYPE_SELECTOR.FONT, symbol[0].toUpperCase() + symbol.slice(1).toLowerCase(), 0, 0);
 			const selected = brush === this.type;
 			obj.layer = obj.hovered;
 			renderer.stroke(selected ? Color.YELLOW : Color.WHITE, selected ? 3 : 1).infer(shape);

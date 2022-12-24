@@ -1591,7 +1591,7 @@ try {
 		}),
 
 		[TYPES.SNOW]: new Element(4, [new Color("#cdd0d4"), new Color("#bbd5f0"), new Color("#e1e6eb")], 0.5, 0.2, (x, y) => {
-			solidUpdate(x, y, 0, 1);
+			solidUpdate(x, y, 0, .9);
 		}, (x, y) => {
 			Element.setCell(x, y, TYPES.WATER);
 			return true;

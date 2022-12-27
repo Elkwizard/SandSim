@@ -272,8 +272,100 @@ const synth = new Synth();
 		}
 	}
 
+	class WorldSave {
+		constructor(grid) {
+			this.grid = grid;
+		}
+		toByteBuffer(buffer = new ByteBuffer()) {
+			buffer.write.uint32(this.grid.length);
+			buffer.write.uint32(this.grid[0].length);
+
+			let lId, lActs, lReference;
+			let duration = 0;
+			
+			const writeBlock = () => {
+				if (duration) {
+					buffer.write.uint16(duration);
+					buffer.write.uint8(lId);
+					if (lId) {
+						buffer.write.uint8(lReference);
+						buffer.write.int32(lActs);
+					}
+				}
+			};
+
+			for (let i = 0; i < this.grid.length; i++) {
+				for (let j = 0; j < this.grid[0].length; j++) {
+					const { id, reference, acts } = this.grid[i][j];
+					if (lId !== id || lReference !== reference || lActs !== acts || duration === 0xFFFF) {
+						writeBlock();
+						lId = id;
+						lReference = reference;
+						lActs = acts;
+						duration = 1;
+					} else duration++;
+				}
+			}
+
+			writeBlock();
+
+			return buffer;
+		}
+		static fromByteBuffer(buffer) {
+			const width = buffer.read.uint32();
+			const height = buffer.read.uint32();
+			const save = new WorldSave(
+				Array.dim(width, height)
+					.map(() => new Cell(TYPES.AIR))
+			);
+			
+			let totalCells = 0;
+			let x = 0, y = 0;
+
+			while (totalCells < width * height) {
+				const duration = buffer.read.uint16();
+				totalCells += duration;
+				const id = buffer.read.uint8();
+				if (id) {
+					const reference = buffer.read.uint8();
+					const acts = buffer.read.int32();
+					for (let i = 0; i < duration; i++) {
+						const cell = save.grid[x][y];
+						cell.id = id;
+						cell.reference = reference;
+						cell.acts = acts;
+						
+						y++;
+						if (y === height) {
+							y = 0;
+							x++;
+						}
+					}
+				} else {
+					for (let i = 0; i < duration; i++) {
+						y++;
+						if (y === height) {
+							y = 0;
+							x++;
+						}
+					}
+					continue;
+				}
+
+			}
+
+			return save;
+		}
+	}
+	
+	const SAVE_FILE_PATH = "world.sand";
+
+	fileSystem.createFileType(WorldSave, ["sand"]);
+
 	const grid = Array.dim(width / CELL, height / CELL)
 		.map(() => new Cell(TYPES.AIR));
+
+	
 
 	const WIDTH = grid.length;
 	const HEIGHT = grid[0].length;
@@ -2658,6 +2750,7 @@ const synth = new Synth();
 
 	let lightSources = [];
 
+
 	intervals.continuous(time => {
 		try {
 			let hoveredElementType = TYPES.AIR;
@@ -2669,6 +2762,23 @@ const synth = new Synth();
 					hoveredElementActs = grid[coord.x][coord.y].acts;
 				}
 			};
+
+			if (keyboard.justPressed("d")) { // download
+				fileSystem.writeFile(SAVE_FILE_PATH, new WorldSave(grid));
+				fileSystem.downloadFile(SAVE_FILE_PATH);
+			}
+
+			if (keyboard.justPressed("u")) { // upload
+				fileSystem.uploadFile(SAVE_FILE_PATH).then(() => {
+					const { grid: uploadedGrid } = fileSystem.readFile(SAVE_FILE_PATH);
+					const w = Math.min(WIDTH, uploadedGrid.length);
+					const h = Math.min(HEIGHT, uploadedGrid[0].length);
+					for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) {
+						grid[i][j] = uploadedGrid[i][j];
+						Element.updateCell(i, j);
+					}
+				});
+			}
 			
 			if (!SETTINGS_SHOWN) {
 				for (const key of keyboard.downQueue) {

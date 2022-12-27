@@ -1,7 +1,7 @@
 
 const synth = new Synth();
 
-try {
+// try {
 	title = "Sandulation";
 
 	const RTX = true;
@@ -631,7 +631,6 @@ try {
 			const dx = fx - x;
 			const dy = fy - y;
 			const len = Math.sqrt(dx * dx + dy * dy);
-			let moved = false;
 			let lx = x;
 			let ly = y;
 			for (let i = 1; i <= len; i++) {
@@ -648,18 +647,17 @@ try {
 				ly = ny;
 			}
 
-			if (this.isEmpty(fx, fy, passthrough)) {
+			if (this.isEmpty(fx, fy, passthrough))
 				move(x, y, fx, fy);
-				return true;
-			}
-			return false;
+			else move(x, y, lx, ly);
+			
+			return true;
 		}
 
 		static tryMoveReference(x, y, fx, fy, passthrough, move = Element.move) {
 			const dx = fx - x;
 			const dy = fy - y;
 			const len = Math.sqrt(dx * dx + dy * dy);
-			let moved = false;
 			let lx = x;
 			let ly = y;
 			for (let i = 1; i <= len; i++) {
@@ -676,11 +674,10 @@ try {
 				ly = ny;
 			}
 
-			if (this.isEmptyReference(fx, fy, passthrough)) {
+			if (this.isEmptyReference(fx, fy, passthrough))
 				move(x, y, fx, fy);
-				return true;
-			}
-			return false;
+			else move(x, y, lx, ly);
+			return true;
 		}
 	}
 
@@ -692,7 +689,7 @@ try {
 	const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL, TYPES.ESTIUM]);
 	const SALT_WATER_SWAP_PASSTHROUGH = new Set([TYPES.WATER]);
 	const SOLID_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.WATER, TYPES.BLOOD, TYPES.ESTIUM, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_SILVER, TYPES.LIQUID_GOLD, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_MAX, TYPES.SALT_WATER]);
-	const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASS_THROUGH, TYPES.AIR, TYPES.PARTICLE]);
+	const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASS_THROUGH, TYPES.PARTICLE]);
 	const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 	const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
 	const ANT_UNSTICKABLE = new Set([TYPES.GENDERFLUID, TYPES.COPPER, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.IRON, TYPES.LIQUID_IRON, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.MUSCLE, ...WATER_TYPES]);
@@ -942,7 +939,7 @@ try {
 			const angle = Random.perlin2D(x, y, 0.005) * Math.PI * 2;
 			const vec = new Vector2(x, y).rotate(angle);
 			const mod = (a, b) => (a % b + b) % b;
-			return mod(vec.y, 5) < 1 ? Color.alpha(Color.RED, 40 / 255) : Color.BLANK;
+			return mod(vec.y, 5) < 1 ? Color.alpha(Color.RED, 40 / 255) : new Color(100, 100, 100, Color.EPSILON);
 
 			const vectors = [];
 			for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
@@ -956,7 +953,16 @@ try {
 			// else if (f.x >= 0 && f.y < 0) return new Color("#00FF0001");
 			// else if (f.x < 0 && f.y >= 0) return new Color("#0000FF01");
 			// else return new Color("#FFFFFF01")
-		}, 0, 0),
+		}, 0, 0, (x, y) => {
+			const v = grid[x][y].vel;
+			if (Element.threeChecks(x, y + 1, SOLID_PASS_THROUGH)) {
+				const c = Random.range(0, Math.PI);
+				v.x = Math.cos(c);
+				v.y = Math.sin(c);
+			}
+			Element.tryMove(x, y, Math.round(x + v.x), Math.round(y + v.y), SOLID_PASS_THROUGH)
+		
+		}),
 
 		[TYPES.ENDOTHERMIA]: new Element(1, Color.BLUE),
 
@@ -1590,9 +1596,7 @@ try {
 			return true;
 		}),
 
-		[TYPES.SNOW]: new Element(4, [new Color("#cdd0d4"), new Color("#bbd5f0"), new Color("#e1e6eb")], 0.5, 0.2, (x, y) => {
-			solidUpdate(x, y, 0, .9);
-		}, (x, y) => {
+		[TYPES.SNOW]: new Element(2, [new Color("#e1e6ed"), new Color("#dfe7f5"), new Color("#d5e0f0")], 0.5, 0.2, solidUpdate, (x, y) => {
 			Element.setCell(x, y, TYPES.WATER);
 			return true;
 		}),
@@ -2278,52 +2282,53 @@ try {
 		[TYPES.PARTICLE]: new Element(1, (x, y) => {
 			return DATA[grid[x][y].reference].getColor(x, y);
 		}, 0, 0, (x, y) => {
-			try {
-				let base = grid[x][y].reference;
-				const { vel } = grid[x][y];
-				vel.y += GRAVITY;
+			let base = grid[x][y].reference;
+			const { vel } = grid[x][y];
+			vel.y += GRAVITY;
 
-				const fx = x + Math.round(vel.x);
-				const fy = y + Math.round(vel.y);
+			const fx = x + Math.round(vel.x);
+			const fy = y + Math.round(vel.y);
 
-				const dx = fx - x;
-				const dy = fy - y;
-				const len = Math.sqrt(dx * dx + dy * dy);
-				let moved = false;
-				let lx = x;
-				let ly = y;
-				for (let i = 1; i <= len; i++) {
-					const t = i / len;
-					const nx = Math.round(x + dx * t);
-					const ny = Math.round(y + dy * t);
-
-					if (
-						!Element.inBounds(nx, ny) ||
-						grid[nx][ny].id === base ||
-						!PARTICLE_PASSTHROUGH.has(grid[nx][ny].id)
-					) {
-						if (lx !== x || ly !== y) {
-							Element.move(x, y, lx, ly);
-							Element.setCell(lx, ly, base);
-							break;
-						} else {
-							Element.setCell(x, y, base);
-							break;
-						}
-					}
-					lx = nx;
-					ly = ny;
-				}
-
-				if (
-					Element.inBounds(fx, fy) &&
-					grid[fx][fy].id !== base &&
-					PARTICLE_PASSTHROUGH.has(grid[fx][fy].id)
-				) Element.move(x, y, fx, fy);
-			} catch (err) {
-				alert(err.stack);
+			if (fx === x && fy === y) {
+				Element.updateCell(x, y);
+				return;
 			}
 
+			const dx = fx - x;
+			const dy = fy - y;
+			const len = Math.sqrt(dx * dx + dy * dy);
+
+			let lx = x;
+			let ly = y;
+			for (let i = 1; i <= len; i++) {
+				const t = i / len;
+				const nx = Math.round(x + dx * t);
+				const ny = Math.round(y + dy * t);
+
+				if (
+					!Element.inBounds(nx, ny) ||
+					grid[nx][ny].id === base ||
+					!PARTICLE_PASSTHROUGH.has(grid[nx][ny].id)
+				) {
+					if (lx !== x || ly !== y)
+						Element.move(x, y, lx, ly);
+					Element.setCell(lx, ly, base);
+					return;
+				}
+				lx = nx;
+				ly = ny;
+			}
+
+			if (
+				Element.inBounds(fx, fy) &&
+				grid[fx][fy].id !== base &&
+				PARTICLE_PASSTHROUGH.has(grid[fx][fy].id)
+			) Element.move(x, y, fx, fy);
+			else {
+				Element.move(x, y, lx, ly);
+				Element.setCell(lx, ly, base);
+			}
+			
 		}, () => null, true),
 		[TYPES.BRICK]: new Element(1, (x, y) => {
 			const W = 10;
@@ -2746,78 +2751,72 @@ try {
 							explode(ox, oy, r);
 						else if (brush === TYPES.ENDOTHERMIA)
 							explode(ox, oy, r);
-						else if (brush === TYPES.EXOTHERMIA) {
-							for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
-								if (i * i + j * j < r * r) {
-									const x = i + ox;
-									const y = j + oy;
-									if (Element.inBounds(x, y)) Element.tryBurn(x, y, TYPES.FIRE);
-								}
-							}
-						}
 						else {
-							if (brushType == 0) {
+							const handleCell = (x, y) => {
+								if (Element.inBounds(x, y)) {
+									if (brush === TYPES.EXOTHERMIA)
+										Element.tryBurn(x, y, TYPES.FIRE);
+									else if (brush === TYPES.AIR || Element.isEmpty(x, y))
+										Element.setCell(x, y, brush);
+								}
+									
+							};
+							if (brushType == 0) { // Circle
 								for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 									if (i * i + j * j < r * r) {
 										const x = i + ox;
 										const y = j + oy;
-										if (Element.inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
-											Element.setCell(x, y, brush);
+										handleCell(x, y);	
 									}
 								}
 							}
-							else if (brushType == 1) {
+							else if (brushType == 1) { // Square
 								let or = r - 1;
 								for (let i = -or; i <= or; i++) for (let j = -or; j <= or; j++) {
 									const x = i + ox;
 									const y = j + oy;
-									if (Element.inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
-										Element.setCell(x, y, brush);
+									handleCell(x, y);
 								}
 							}
-							else if (brushType == 2) {
+							else if (brushType == 2) { // Ring
 								for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 									if (i * i + j * j < r * r && i * i + j * j >= (r - 1) * (r - 1)) {
 										const x = i + ox;
 										const y = j + oy;
-										if (Element.inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
-											Element.setCell(x, y, brush);
+										handleCell(x, y);
 									}
 								}
 							}
-							else if (brushType == 3) {
+							else if (brushType == 3) { // Forceful
 								for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 									if (i * i + j * j < r * r) {
 										const x = i + ox;
 										const y = j + oy;
-										if (Element.inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
-											Element.setCell(x, y, brush);
+										handleCell(x, y);
 										explode(x, y, 1);
 									}
 								}
 							}
-							else if (brushType == 4) {
+							else if (brushType == 4) { // Row
 								for (let i = 0; i <= WIDTH; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
 									const x = i;
 									const y = j + oy;
-									if (Element.inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
-										Element.setCell(x, y, brush);
+									handleCell(x, y);
 								}
 							}
-							else if (brushType == 5) {
+							else if (brushType == 5) { // Column
 								for (let i = 0; i <= HEIGHT; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
 									const x = j + ox;
 									const y = i;
-									if (Element.inBounds(x, y) && (brush === TYPES.AIR || Element.isEmpty(x, y)))
-										Element.setCell(x, y, brush);
+									handleCell(x, y);
 								}
 							}
-							else if (brushType == 6) {
-								for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
+							else if (brushType == 6) { // EraseOnly
+								if (brush !== TYPES.EXOTHERMIA && brush !== TYPES.AIR) for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 									if (i * i + j * j < r * r) {
 										const x = i + ox;
 										const y = j + oy;
-										if (Element.inBounds(x, y) && Element.isType(x, y, brush)) Element.setCell(x, y, TYPES.AIR)
+										if (Element.inBounds(x, y) && Element.isType(x, y, brush)) Element.setCell(x, y, TYPES.AIR);
 									}
 								}
 							}
@@ -3047,4 +3046,4 @@ try {
 		}
 	}, IntervalFunction.UPDATE);
 
-} catch (e) { alert(e.stack); }
+// } catch (e) { alert(e.stack); }

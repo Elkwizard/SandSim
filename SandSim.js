@@ -2765,11 +2765,11 @@ const synth = new Synth();
 
 			if (keyboard.justPressed("d")) { // download
 				fileSystem.writeFile(SAVE_FILE_PATH, new WorldSave(grid));
-				fileSystem.downloadFile(SAVE_FILE_PATH);
+				if (keyboard.pressed("Shift")) fileSystem.downloadFile(SAVE_FILE_PATH);
 			}
 
 			if (keyboard.justPressed("u")) { // upload
-				fileSystem.uploadFile(SAVE_FILE_PATH).then(() => {
+				const replace = () => {
 					const { grid: uploadedGrid } = fileSystem.readFile(SAVE_FILE_PATH);
 					const w = Math.min(WIDTH, uploadedGrid.length);
 					const h = Math.min(HEIGHT, uploadedGrid[0].length);
@@ -2777,7 +2777,10 @@ const synth = new Synth();
 						grid[i][j] = uploadedGrid[i][j];
 						Element.updateCell(i, j);
 					}
-				});
+				};
+				if (keyboard.pressed("Shift"))
+					fileSystem.uploadFile(SAVE_FILE_PATH).then(replace);
+				else replace();
 			}
 			
 			if (!SETTINGS_SHOWN) {

@@ -5,8 +5,26 @@ try {
 	title = "Sandulation";
 	document.getElementsByTagName("link")[0].href = "./favicon.ico";
 
+	const controls = {
+		"Touch/Click": "Draw with current brush",
+		"Up/Down Arrows": "Change brush size",
+		"</> & Left/Right Arrows": "Change brush type",
+		"Space": "Pause/Play",
+		"Enter": "Advance one step while paused",
+		"s": "Open element selection window",
+		"d": "Save current world locally",
+		"u": "Reset most recently saved/loaded world",
+		"Shift + d": "Download current world to file",
+		"Shift + u": "Upload world from file",
+		"r": "Reset world",
+		"e": "Restore zoom",
+		"Shift + =": "Zoom in",
+		"Shift + -": "Zoom out",
+		"Shift + Arrow Keys": "Move camera",
+		"g": "Toggle 'RTX'"
+	};
 
-	const RTX = true;
+	let RTX = true;
 
 	const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
 		const godRays = new GPUShader(image.width / PIXEL_SIZE, image.height / PIXEL_SIZE, `
@@ -20,6 +38,7 @@ try {
 			uniform float solidLightCutoff;
 			uniform bool clouds;
 			uniform float time;
+			uniform bool identity;
 
 			uniform sampler2D image;
 
@@ -167,6 +186,10 @@ try {
 			}
 
 			vec4 shader() {
+				if (identity) {
+					return vec4(getPixel(position / resolution).rgb, 1.0);
+				}
+				
 				time;
 
 				vec2 uv = position / resolution;
@@ -208,6 +231,7 @@ try {
 			attenuation = direction ? 0 : 0.1,
 			solidUntil = 0,
 			clouds = false,
+			identity = false,
 		}) {
 			godRays.setArguments({
 				image,
@@ -221,6 +245,7 @@ try {
 				globalAttenuation: attenuation,
 				localAttenuation: 0.03,
 				solidLightCutoff: solidUntil / DISTANCE_SCALE,
+				identity
 			});
 
 			return godRays;
@@ -410,15 +435,13 @@ try {
 			this.onburn = onburn;
 
 			if (typeof color === "function") {
-				this.getColor = RTX ? color : (x, y) => Color.alpha(color(x, y), 1);
+				this.getColor = color;
 			} else {
 				this.multipleColors = Array.isArray(this.color);
-				if (RTX) {
-					alpha /= 255;
-					if (this.multipleColors)
-						this.color = this.color.map(color => Color.alpha(color, alpha));
-					else this.color = Color.alpha(color, alpha);
-				}
+				alpha /= 255;
+				if (this.multipleColors)
+					this.color = this.color.map(color => Color.alpha(color, alpha));
+				else this.color = Color.alpha(color, alpha);
 			}
 			this.update = update;
 			this.reference = reference;
@@ -2981,7 +3004,9 @@ try {
 				}
 			}
 
-			if (!paused) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+			const singleStep = keyboard.justPressed("Enter");
+
+			if (!paused || singleStep) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
 				const cx = neg_x ? CHUNK_WIDTH - 1 - i : i;
 				const cy = neg_y ? CHUNK_HEIGHT - 1 - j : j;
 				const chunk = chunks[cx][cy];
@@ -3017,16 +3042,15 @@ try {
 				lastIds[i][j] = grid[i][j].id;
 
 			scene.camera.drawInWorldSpace(() => {
-				if (RTX) {
-					const image = rays({
-						direction: new Vector2(100000, -100000),//lightSources[0][0], lightSources[0][1]),
-						color: new Color(105, 105, 50),
-						ambient: new Color(200, 200, 200)
-					});
-					renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
-				} else {
-					renderer.image(tex).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
-				}
+				if (keyboard.justPressed("g")) RTX = !RTX;
+
+				const image = rays({
+					direction: new Vector2(100000, -100000),//lightSources[0][0], lightSources[0][1]),
+					color: new Color(105, 105, 50),
+					ambient: new Color(200, 200, 200),
+					identity: !RTX
+				});
+				renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
 
 				// brush previews
 				const brushPreviewArgs = [Color.LIME, 1 / scene.camera.zoom];
@@ -3144,7 +3168,7 @@ try {
 				}
 			}
 
-			if (!paused) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+			if (!paused || singleStep) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
 				const chunk = chunks[i][j];
 				chunk.sleep = chunk.sleepNext;
 				chunk.sleepNext = true;

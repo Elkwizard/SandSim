@@ -1,8 +1,10 @@
 
 const synth = new Synth();
 
-// try {
+try {
 	title = "Sandulation";
+	document.getElementsByTagName("link")[0].href = "./favicon.ico";
+
 
 	const RTX = true;
 
@@ -282,7 +284,7 @@ const synth = new Synth();
 
 			let lId, lActs, lReference;
 			let duration = 0;
-			
+
 			const writeBlock = () => {
 				if (duration) {
 					buffer.write.uint16(duration);
@@ -318,7 +320,7 @@ const synth = new Synth();
 				Array.dim(width, height)
 					.map(() => new Cell(TYPES.AIR))
 			);
-			
+
 			let totalCells = 0;
 			let x = 0, y = 0;
 
@@ -334,7 +336,7 @@ const synth = new Synth();
 						cell.id = id;
 						cell.reference = reference;
 						cell.acts = acts;
-						
+
 						y++;
 						if (y === height) {
 							y = 0;
@@ -357,7 +359,7 @@ const synth = new Synth();
 			return save;
 		}
 	}
-	
+
 	const SAVE_FILE_PATH = "world.sand";
 
 	fileSystem.createFileType(WorldSave, ["sand"]);
@@ -365,7 +367,7 @@ const synth = new Synth();
 	const grid = Array.dim(width / CELL, height / CELL)
 		.map(() => new Cell(TYPES.AIR));
 
-	
+
 
 	const WIDTH = grid.length;
 	const HEIGHT = grid[0].length;
@@ -742,7 +744,7 @@ const synth = new Synth();
 			if (this.isEmpty(fx, fy, passthrough))
 				move(x, y, fx, fy);
 			else move(x, y, lx, ly);
-			
+
 			return true;
 		}
 
@@ -1053,7 +1055,7 @@ const synth = new Synth();
 				v.y = Math.sin(c);
 			}
 			Element.tryMove(x, y, Math.round(x + v.x), Math.round(y + v.y), SOLID_PASS_THROUGH)
-		
+
 		}),
 
 		[TYPES.ENDOTHERMIA]: new Element(1, Color.BLUE),
@@ -1210,11 +1212,11 @@ const synth = new Synth();
 
 		[TYPES.CORAL]: new Element(1, Color.ORANGE, .2, .1, (x, y) => {
 			Element.affectNeighbors(x, y, (ox, oy) => {
-				if(Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 200;
-				if(Element.isType(ox, oy, TYPES.CORAL) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = grid[ox][oy].acts--;
+				if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 200;
+				if (Element.isType(ox, oy, TYPES.CORAL) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = grid[ox][oy].acts--;
 			})
-			if(grid[x][y].acts == 0) Element.setCell(x, y, TYPES.DEAD_CORAL);
-			if(grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.CORAL)) Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL);
+			if (grid[x][y].acts == 0) Element.setCell(x, y, TYPES.DEAD_CORAL);
+			if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.CORAL)) Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL);
 			grid[x][y].acts--;
 
 			Element.updateCell(x, y)
@@ -1445,7 +1447,7 @@ const synth = new Synth();
 			//same old stone colors :)
 			c = Random.choice(freqColoring([["#79797901", 1], ["#80808001", 1]]));
 
-			if (p > .5 && p < .53  && Random.bool(.85)) c = new Color("#74747401");
+			if (p > .5 && p < .53 && Random.bool(.85)) c = new Color("#74747401");
 
 			return c;
 		}, 0.7),
@@ -1764,14 +1766,14 @@ const synth = new Synth();
 
 		[TYPES.GOLD]: new Element(1, (x, y) => {
 
-			
+
 			y *= .1;
 			x *= .1;
-       		y += Random.sampleSeed;
-        	let yt = y % 1;
+			y += Random.sampleSeed;
+			let yt = y % 1;
 
-        	if (yt < 0) yt++;
-		//yt = Interpolation.smooth(yt);
+			if (yt < 0) yt++;
+			//yt = Interpolation.smooth(yt);
 			y = ~~y;
 			x = ~~x;
 
@@ -1786,14 +1788,14 @@ const synth = new Synth();
 		}),
 
 		[TYPES.AUREATE_DUST]: new Element(5, (x, y) => {
-			return new Color(Random.choice(["#d4af3706", "#d4af3706", "#d4af3706", "#d4af3706","#d4af3706","#d4af3706","#d4af3706","#d4af3706","#d4af3706","#d4af3706","#d4af3706","#d4af3706","#d4af3706", "#d4af3706","#d4af3706","#d4af3700"]));
+			return new Color(Random.choice(["#d4af3706", "#d4af3706", "#d4af3706", "#d4af3706", "#d4af3706", "#d4af3706", "#d4af3706", "#d4af3706", "#d4af3706", "#d4af3706", "#d4af3706", "#d4af3706", "#d4af3706", "#d4af3706", "#d4af3706", "#d4af3700"]));
 		}, 0.1, 0.002, solidUpdate, (x, y) => {
 			Element.setCell(x, y, TYPES.LIQUID_GOLD);
 			return true;
 		}),
 
 		[TYPES.LIQUID_GOLD]: new Element(50, (x, y) => {
-			let t = Random.perlin(x + .2*y);
+			let t = Random.perlin(x + .2 * y);
 			if (t > .5) {
 				return new Color("#ad853e1d");
 			}
@@ -1839,8 +1841,8 @@ const synth = new Synth();
 		[TYPES.RUST]: new Element(1, [new Color("#782907"), new Color("#802a05")], .3, 0, solidUpdate),
 
 		[TYPES.MERCURY]: new Element(2, new Color("#949BA1"), .65, 0, (x, y) => {
-			Element.consumeReact(x, y, TYPES.STONE, Random.bool(.9) ?  TYPES.SAND : TYPES.AUREATE_DUST, .05);
-			
+			Element.consumeReact(x, y, TYPES.STONE, Random.bool(.9) ? TYPES.SAND : TYPES.AUREATE_DUST, .05);
+
 			liquidUpdate(x, y)
 		}),
 
@@ -2087,7 +2089,7 @@ const synth = new Synth();
 			if (Random.bool(.3)) Element.react(x, y, TYPES.GLASS, TYPES.SMOKE);
 
 			Element.affectNeighbors(x, y, (ox, oy) => {
-				if(Element.isType(ox, oy, TYPES.AUREATE_DUST)) Random.bool(.6) ? Element.setCell(x, y, TYPES.AUREATE_DUST) :  Element.setCell(x, y, TYPES.GOLD);
+				if (Element.isType(ox, oy, TYPES.AUREATE_DUST)) Random.bool(.6) ? Element.setCell(x, y, TYPES.AUREATE_DUST) : Element.setCell(x, y, TYPES.GOLD);
 			})
 
 			lavaUpdate(x, y, TYPES.BLUE_FIRE);
@@ -2420,7 +2422,7 @@ const synth = new Synth();
 				Element.move(x, y, lx, ly);
 				Element.setCell(lx, ly, base);
 			}
-			
+
 		}, () => null, true),
 		[TYPES.BRICK]: new Element(1, (x, y) => {
 			const W = 10;
@@ -2496,7 +2498,7 @@ const synth = new Synth();
 			const p1 = Random.octave(3, Random.perlin2D, x, y, .1);
 			c = Random.choice(freqColoring([["#80423601", 2], ["#6b3c2301", 2], ["#753e2e01", 3]]));
 
-			if (p > .5 && p < .55  && Random.bool(.76)) c = new Color("#542e2501");
+			if (p > .5 && p < .55 && Random.bool(.76)) c = new Color("#542e2501");
 			else if (p1 < .8 && p1 > .76 && Random.bool(.7)) c = new Color("#8a5d5a01");
 
 			return c;
@@ -2567,7 +2569,7 @@ const synth = new Synth();
 
 		[TYPES.LIGHT_SAD]: new Element(1, new Color(20, 20, 20), 0.9, 0.001, (x, y) => {
 			Element.affectNeighbors(x, y, (ox, oy) => {
-				if(Element.isTypes(ox, oy, new Set([TYPES.LIGHT, TYPES.CORAL, TYPES.ACTIVE_NEURON, TYPES.ELECTRICITY]))){
+				if (Element.isTypes(ox, oy, new Set([TYPES.LIGHT, TYPES.CORAL, TYPES.ACTIVE_NEURON, TYPES.ELECTRICITY]))) {
 					Element.setCell(x, y, TYPES.LIGHT);
 				}
 			});
@@ -2625,7 +2627,7 @@ const synth = new Synth();
 			renderer.unclip();
 			renderer.textMode = TextMode.CENTER_CENTER;
 			const words = this.name.split(" ");
-			
+
 			const symbol = words.length === 1 ? words[0].slice(0, 2) : words.slice(0, 2).map(word => word[0]).join("");
 			// text(TYPE_SELECTOR.FONT, symbol[0].toUpperCase() + symbol.slice(1).toLowerCase(), 0, 0);
 			const selected = brush === this.type;
@@ -2782,15 +2784,15 @@ const synth = new Synth();
 					fileSystem.uploadFile(SAVE_FILE_PATH).then(replace);
 				else replace();
 			}
-			
+
 			if (!SETTINGS_SHOWN) {
 				for (const key of keyboard.downQueue) {
 					if (keyboard.released("Shift")) {
-						if (key === "ArrowRight" || key === "."){
+						if (key === "ArrowRight" || key === ".") {
 							if (brushType + 1 < BRUSH_TYPES.length) brushType++;
-							else brushType = 0;	
+							else brushType = 0;
 						}
-						else if (key === "ArrowLeft" || key === ","){
+						else if (key === "ArrowLeft" || key === ",") {
 							if (brushType > 0) brushType--;
 							else brushType = BRUSH_TYPES.length - 1;
 						}
@@ -2841,9 +2843,9 @@ const synth = new Synth();
 					for (const touch of touches.allPressed) {
 						const r = brushSize;
 						const { screen, world } = touches.get(touch);
-						
+
 						const hovered = scene.main.sceneObjectArray.some(el => !el.hidden && el.collidePoint(screen));
-						
+
 						if (hovered) {
 							anyHovered = true;
 							continue;
@@ -2851,7 +2853,7 @@ const synth = new Synth();
 
 
 						const { x: ox, y: oy } = Vector2.floor(world.over(CELL));
-						
+
 						// if(touches.allPressed.length == 1){
 						// 	try{let touch2 = touch1}
 						// 	catch{let touch2 = [ox, oy]}
@@ -2872,14 +2874,14 @@ const synth = new Synth();
 									else if (brush === TYPES.AIR || Element.isEmpty(x, y))
 										Element.setCell(x, y, brush);
 								}
-									
+
 							};
 							if (brushType == 0) { // Circle
 								for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 									if (i * i + j * j < r * r) {
 										const x = i + ox;
 										const y = j + oy;
-										handleCell(x, y);	
+										handleCell(x, y);
 									}
 								}
 							}
@@ -3159,4 +3161,4 @@ const synth = new Synth();
 		}
 	}, IntervalFunction.UPDATE);
 
-// } catch (e) { alert(e.stack); }
+} catch (e) { alert(e.stack); }

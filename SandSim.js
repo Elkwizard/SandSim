@@ -1693,8 +1693,15 @@ try {
 		}, (x, y) => {
 			Element.trySetCell(x, y - 1, TYPES.HYDROGEN);
 		}),
-
-		[TYPES.COAL]: new Element(1, [new Color("#36454f"), new Color("#2d3b45"), new Color("#2d3b45")], 0.6, 0.15, solidUpdate, (x, y) => {
+		
+		[TYPES.COAL]: new Element(1, (x, y) => {
+			const f = 0.3;
+			let p = Random.voronoi2D(x, y - 1, f);
+			if (p < .2) return new Color("#212b3301");
+			p = Random.voronoi2D(x, y, f);
+			if (p < .2) return new Color("#1e283001");
+			return new Color(Random.bool() ? "#212b3301" : "#242e3601");
+		}, 0.6, 0.15, solidUpdate, (x, y) => {
 			Element.trySetCell(x, y - 1, Random.bool(.06) ? TYPES.ASH : TYPES.SMOKE);
 		}),
 

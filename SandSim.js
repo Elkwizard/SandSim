@@ -741,7 +741,7 @@ try {
 					if (Element.isType(x, y - 1, soaker)) Element.die(x, y - 1);
 					else Element.updateCell(x, y);
 				}
-			} catch (e) { alert(e) }
+			} catch (e) { alert(e + "\n" + e.stack) }
 		}
 
 		static tryMove(x, y, fx, fy, passthrough, move = Element.move) {
@@ -3226,10 +3226,10 @@ try {
 				text(Font.Arial15, hoveredElementType ? typeName(hoveredElementType) + (hoveredElementActs ? " (" + hoveredElementActs + ")" : "") : "", width - 10, 10);
 			}
 		} catch (err) {
-			alert(err.toString() + "\n" + err.stack);
+			alert(err + "\n" + err.stack);
 		}
 	}, IntervalFunction.UPDATE);
 
 } catch (e) {
-	alert(err.toString() + "\n" + err.stack);
+	alert(err + "\n" + err.stack);
 }

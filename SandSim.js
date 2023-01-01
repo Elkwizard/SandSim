@@ -268,7 +268,7 @@ try {
 		"BAHHUM",
 		"ESTIUM", "ESTIUM_GAS",
 		"DDT", "ANT", "BEE", "HIVE", "HONEY", "SUGAR",
-		"WATER", "ICE", "SNOW", "SALT", "SALT_WATER",
+		"WATER", "ICE", "SNOW", "STAINED_SNOW", "SALT", "SALT_WATER",
 		"SAND", "KELP", "KELP_TOP", "PNEUMATOCYST",
 		"WOOD", "COAL", "OIL", "FUSE", "ASH",
 		"WAX", "GRAINY_WAX", "MOLTEN_WAX",
@@ -486,7 +486,7 @@ try {
 
 		static react(x, y, reactant, product, chance = 1) {
 			let reacted = false;
-			this.affectAllNeighbors(x, y, (ox, oy) => {
+			Element.affectAllNeighbors(x, y, (ox, oy) => {
 				if (Element.isType(ox, oy, reactant) && Random.bool(chance)) {
 					Element.setCell(ox, oy, product);
 					reacted = true;
@@ -497,7 +497,7 @@ try {
 
 		static consumeReact(x, y, reactant, product, chance = 1) {
 			let reacted = false;
-			this.affectAllNeighbors(x, y, (ox, oy) => {
+			Element.affectAllNeighbors(x, y, (ox, oy) => {
 				if (!reacted && Element.isType(ox, oy, reactant) && Random.bool(chance)) {
 					Element.setCell(x, y, product);
 					Element.die(ox, oy);
@@ -509,7 +509,7 @@ try {
 
 		static mixReact(x, y, reactant, product, chance = 1) {
 			let reacted = false;
-			this.affectAllNeighbors(x, y, (ox, oy) => {
+			Element.affectAllNeighbors(x, y, (ox, oy) => {
 				if (!reacted && Element.isType(ox, oy, reactant) && Random.bool(chance)) {
 					Element.setCell(x, y, product);
 					Element.setCell(ox, oy, product);
@@ -522,7 +522,7 @@ try {
 
 		static reactMany(x, y, reactant, product, chance = 1) {
 			let reacted = false;
-			this.affectAllNeighbors(x, y, (ox, oy) => {
+			Element.affectAllNeighbors(x, y, (ox, oy) => {
 				if (Element.isTypes(ox, oy, reactant) && Random.bool(chance)) {
 					Element.setCell(x, y, product);
 					reacted = true;
@@ -533,7 +533,7 @@ try {
 
 		static consumeReactMany(x, y, reactant, product, chance = 1) {
 			let reacted = false;
-			this.affectAllNeighbors(x, y, (ox, oy) => {
+			Element.affectAllNeighbors(x, y, (ox, oy) => {
 				if (!reacted && Element.isTypes(ox, oy, reactant) && Random.bool(chance)) {
 					Element.setCell(x, y, product);
 					Element.die(ox, oy);
@@ -545,7 +545,7 @@ try {
 
 		static mixReactMany(x, y, reactant, product, chance = 1) {
 			let reacted = false;
-			this.affectAllNeighbors(x, y, (ox, oy) => {
+			Element.affectAllNeighbors(x, y, (ox, oy) => {
 				if (!reacted && Element.isTypes(ox, oy, reactant) && Random.bool(chance)) {
 					Element.setCell(x, y, product);
 					Element.setCell(ox, oy, product);
@@ -559,7 +559,7 @@ try {
 			for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
 				const ox = x + i;
 				const oy = y + j;
-				if ((i || j) && this.inBounds(ox, oy))
+				if ((i || j) && Element.inBounds(ox, oy))
 					effect(ox, oy);
 			}
 		}
@@ -568,7 +568,7 @@ try {
 			for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
 				const ox = x + i;
 				const oy = y + j;
-				if ((i || j) && this.inBounds(ox, oy) && grid[ox][oy].id !== TYPES.AIR)
+				if ((i || j) && Element.inBounds(ox, oy) && grid[ox][oy].id !== TYPES.AIR)
 					effect(ox, oy);
 			}
 		}
@@ -585,8 +585,8 @@ try {
 		}
 
 		static trySetCell(x, y, id, passthrough) {
-			if (this.isEmpty(x, y, passthrough)) {
-				this.setCell(x, y, id);
+			if (Element.isEmpty(x, y, passthrough)) {
+				Element.setCell(x, y, id);
 				return true;
 			}
 			return false;
@@ -602,7 +602,7 @@ try {
 			} else {
 				cell.id = id;
 			}
-			this.updateCell(x, y);
+			Element.updateCell(x, y);
 		}
 
 		static setCell(x, y, id) {
@@ -617,14 +617,14 @@ try {
 			}
 			cell.vel.mul(0);
 			cell.acts = 0;
-			this.updateCell(x, y);
+			Element.updateCell(x, y);
 		}
 
 		static dereference(x, y) {
 			const cell = grid[x][y];
 			cell.id = cell.reference;
 			cell.reference = 0;
-			this.updateCell(x, y);
+			Element.updateCell(x, y);
 		}
 
 		static sleeping(x, y) {
@@ -640,7 +640,7 @@ try {
 			for (let i = -S; i <= S; i++) for (let j = -S; j <= S; j++) {
 				const X = x + i;
 				const Y = y + j;
-				if (!this.inBounds(X, Y))
+				if (!Element.inBounds(X, Y))
 					continue;
 				const cx = ~~(X / CHUNK);
 				const cy = ~~(Y / CHUNK);
@@ -653,16 +653,16 @@ try {
 		}
 
 		static die(x, y) {
-			this.setCell(x, y, TYPES.AIR);
+			Element.setCell(x, y, TYPES.AIR);
 		}
 
 		static isEmptyReference(x, y, set = Element.DEFAULT_PASS_THROUGH) {
-			return this.inBounds(x, y) && set.has(grid[x][y].id);
+			return Element.inBounds(x, y) && set.has(grid[x][y].id);
 		}
 
 
 		static isEmpty(x, y, set = Element.DEFAULT_PASS_THROUGH) {
-			if (this.inBounds(x, y)) {
+			if (Element.inBounds(x, y)) {
 				let id = grid[x][y].id;
 				if (DATA[id].reference) {
 					if (set.has(id)) return true;
@@ -718,11 +718,11 @@ try {
 		}
 
 		static isType(x, y, type) {
-			return this.inBounds(x, y) && grid[x][y].id === type;
+			return Element.inBounds(x, y) && grid[x][y].id === type;
 		}
 
 		static isTypes(x, y, types) {
-			return this.inBounds(x, y) && types.has(grid[x][y].id);
+			return Element.inBounds(x, y) && types.has(grid[x][y].id);
 		}
 
 		static permeate(x, y, permeator, permeatee, soaker, violence = 5) {
@@ -736,7 +736,7 @@ try {
 					ox += Math.round(Number.remap(p, 0, 1, -violence, violence));
 				}
 
-				if (this.inBounds(ox, y + d) && Element.isType(ox, y + d, permeatee)) {
+				if (Element.inBounds(ox, y + d) && Element.isType(ox, y + d, permeatee)) {
 					Element.setCell(ox, y + d, permeator);
 					if (Element.isType(x, y - 1, soaker)) Element.die(x, y - 1);
 					else Element.updateCell(x, y);
@@ -754,7 +754,7 @@ try {
 				const t = i / len;
 				const nx = Math.round(x + dx * t);
 				const ny = Math.round(y + dy * t);
-				if (!this.isEmpty(nx, ny, passthrough)) {
+				if (!Element.isEmpty(nx, ny, passthrough)) {
 					if (lx !== x || ly !== y) {
 						move(x, y, lx, ly);
 						return true;
@@ -764,7 +764,7 @@ try {
 				ly = ny;
 			}
 
-			if (this.isEmpty(fx, fy, passthrough))
+			if (Element.isEmpty(fx, fy, passthrough))
 				move(x, y, fx, fy);
 			else move(x, y, lx, ly);
 
@@ -781,7 +781,7 @@ try {
 				const t = i / len;
 				const nx = Math.round(x + dx * t);
 				const ny = Math.round(y + dy * t);
-				if (!this.isEmptyReference(nx, ny, passthrough)) {
+				if (!Element.isEmptyReference(nx, ny, passthrough)) {
 					if (lx !== x || ly !== y) {
 						move(x, y, lx, ly);
 						return true;
@@ -791,7 +791,7 @@ try {
 				ly = ny;
 			}
 
-			if (this.isEmptyReference(fx, fy, passthrough))
+			if (Element.isEmptyReference(fx, fy, passthrough))
 				move(x, y, fx, fy);
 			else move(x, y, lx, ly);
 			return true;
@@ -801,11 +801,13 @@ try {
 	const GRAVITY = 0.5 / CELL;
 	const DISPERSION = 4;
 
+	const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT]);
+	const LIQUID = new Set([TYPES.WATER, TYPES.BLOOD, TYPES.ESTIUM, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_GOLD, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_MAX, TYPES.SALT_WATER]);
 	const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE, TYPES.PARTICLE]);
-	const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT]);
+	const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, ...GAS]);
 	const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL, TYPES.ESTIUM]);
 	const SALT_WATER_SWAP_PASSTHROUGH = new Set([TYPES.WATER]);
-	const SOLID_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.WATER, TYPES.BLOOD, TYPES.ESTIUM, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_SILVER, TYPES.LIQUID_GOLD, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_MAX, TYPES.SALT_WATER]);
+	const SOLID_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, ...LIQUID]);
 	const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASS_THROUGH, TYPES.PARTICLE]);
 	const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 	const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
@@ -934,17 +936,17 @@ try {
 		fluidUpdate(x, y, -1, 0, GAS_PASS_THROUGH);
 	};
 
-	const solidUpdate = (x, y, g = GRAVITY, dxShiftChance = 0, theta = Math.PI * 0.5) => {
+	const solidUpdate = (x, y, g = GRAVITY, dxShiftChance = 0, tryMove = Element.tryMove) => {
 		const { vel } = grid[x][y];
 		vel.y += g;
 		const dx = Random.bool(dxShiftChance) ? (Random.bool(.5) ? -1 : 1) : 0;
 		const dy = 1 + Math.round(vel.y);
-		if (Element.tryMove(x, y, x + dx, y + dy, SOLID_PASS_THROUGH));
+		if (tryMove(x, y, x + dx, y + dy, SOLID_PASS_THROUGH));
 		else {
 			//Math.round(dy * Math.tan(theta * 0.5))
 			const d = Random.bool() ? -1 : 1;
-			if (Element.tryMove(x, y, x - d, y + dy, SOLID_PASS_THROUGH));
-			else if (Element.tryMove(x, y, x + d, y + dy, SOLID_PASS_THROUGH));
+			if (tryMove(x, y, x - d, y + dy, SOLID_PASS_THROUGH));
+			else if (tryMove(x, y, x + d, y + dy, SOLID_PASS_THROUGH));
 			else vel.y = 0;
 		}
 	};
@@ -1700,10 +1702,31 @@ try {
 			Element.trySetCell(x, y - 1, TYPES.SMOKE);
 		}),
 		[TYPES.STEAM]: new Element(0, [Color.alpha(Color.LIGHT_GRAY, 0.8), Color.alpha(Color.LIGHT_GRAY, 0.8), new Color("#88989d")], 0, 0, (x, y) => {
+			{ // rain
+				if (Random.bool(0.0004)) {
+					Element.setCell(x, y, TYPES.WATER);
+					return;
+				}
+			};
+			{ // lightning
+				const CLOUD_RADIUS = 5;
+				const CLOUD_STRICTNESS = 0.8;
+				const LIGHTNING_DELAY = 30;
+				const x1 = x + Random.int(-CLOUD_RADIUS, CLOUD_RADIUS);
+				const y1 = y + Random.int(-CLOUD_RADIUS, CLOUD_RADIUS);
+				if (Element.isType(x1, y1, TYPES.STEAM)) {
+					grid[x][y].acts++;
+				}
+				if (Random.bool(CLOUD_STRICTNESS)) grid[x][y].acts--;
+				if (grid[x][y].acts > LIGHTNING_DELAY && Random.bool(0.000001)) {
+					Element.setCell(x, y, TYPES.LIGHTNING);
+					return;
+				}
+			};
 			gasUpdate(x, y);
 			Element.updateCell(x, y);
-			if (Random.bool(0.0004))
-				Element.setCell(x, y, TYPES.WATER);
+			
+			
 		}),
 
 		[TYPES.ICE]: new Element(1, [new Color("#93baed"), new Color("#a4c3eb"), new Color("#c0d4ed"), new Color("#b0caeb")], 0.5, 0.01, (x, y) => {
@@ -1713,10 +1736,32 @@ try {
 			return true;
 		}),
 
-		[TYPES.SNOW]: new Element(2, [new Color("#e1e6ed"), new Color("#dfe7f5"), new Color("#d5e0f0")], 0.5, 0.2, solidUpdate, (x, y) => {
+		[TYPES.SNOW]: new Element(1, [new Color("#e1e6ed"), new Color("#dfe7f5"), new Color("#d5e0f0")], 0.5, 0.2, (x, y) => {
+			let reacted = false;
+			Element.affectAllNeighbors(x, y, (ox, oy) => {
+				if (!reacted && Element.isTypes(ox, oy, LIQUID) && Random.bool(0.1)) {
+					Element.setCell(x, y, TYPES.STAINED_SNOW);
+					grid[x][y].reference = grid[ox][oy].id;
+					Element.die(ox, oy);
+					reacted = true;
+				}
+			});
+			
+			solidUpdate(x, y);
+		}, (x, y) => {
 			Element.setCell(x, y, TYPES.WATER);
 			return true;
 		}),
+
+		[TYPES.STAINED_SNOW]: new Element(1, (x, y) => {
+			const color1 = DATA[grid[x][y].reference].getColor(x, y);
+			const color2 = DATA[TYPES.SNOW].getColor(x, y);
+			return Color.lerp(color1, color2, 0.5);	
+		}, 0.5, 0.2, (x, y) => {
+			solidUpdate(x, y, GRAVITY, 0, Element.tryMoveReference);
+		}, (x, y) => {
+			Element.setCell(x, y, grid[x][y].reference);
+		}, true),
 
 		[TYPES.STEEL]: new Element(1, (x, y) => {
 			let color;

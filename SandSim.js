@@ -3226,8 +3226,10 @@ try {
 				text(Font.Arial15, hoveredElementType ? typeName(hoveredElementType) + (hoveredElementActs ? " (" + hoveredElementActs + ")" : "") : "", width - 10, 10);
 			}
 		} catch (err) {
-			alert(err.stack);
+			alert(err.toString() + "\n" + err.stack);
 		}
 	}, IntervalFunction.UPDATE);
 
-} catch (e) { alert(e.stack); }
+} catch (e) {
+	alert(err.toString() + "\n" + err.stack);
+}

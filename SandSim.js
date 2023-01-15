@@ -1693,7 +1693,7 @@ try {
 		}, (x, y) => {
 			Element.trySetCell(x, y - 1, TYPES.HYDROGEN);
 		}),
-		
+
 		[TYPES.COAL]: new Element(1, (x, y) => {
 			const f = 0.3;
 			let p = Random.voronoi2D(x, y - 1, f);
@@ -1705,7 +1705,21 @@ try {
 			Element.trySetCell(x, y - 1, Random.bool(.06) ? TYPES.ASH : TYPES.SMOKE);
 		}),
 
-		[TYPES.OIL]: new Element(1, new Color("#123456"), 0.15, 0.2, liquidUpdate, (x, y) => {
+		[TYPES.OIL]: new Element(1, (x, y) => {
+			const distortF = 0.1;
+			const distortStrength = 30;
+			x += distortStrength * Random.perlin2D(x, y, distortF);
+			y += distortStrength * Random.perlin2D(x + 1000, y, distortF);
+			let t = Math.sin(10 * Random.perlin2D(x, y, 0.05));
+			let color;
+			color = Color.lerp(
+				new Color("#222233"),
+				new Color(`hsl(${t * 360}deg, 50%, 10%)`),
+				Random.perlin2D(x, y, 0.03) ** 2
+			);
+			color.alpha = Color.EPSILON;
+			return color;
+		}, 0.15, 0.2, liquidUpdate, (x, y) => {
 			Element.trySetCell(x, y - 1, TYPES.SMOKE);
 		}),
 		[TYPES.STEAM]: new Element(0, [Color.alpha(Color.LIGHT_GRAY, 0.8), Color.alpha(Color.LIGHT_GRAY, 0.8), new Color("#88989d")], 0, 0, (x, y) => {
@@ -1761,13 +1775,15 @@ try {
 		}),
 
 		[TYPES.STAINED_SNOW]: new Element(1, (x, y) => {
-			const color1 = DATA[grid[x][y].reference].getColor(x, y);
+			const { reference } = grid[x][y];
+			const color1 = reference === TYPES.STAINED_SNOW ? Color.BLANK : DATA[reference].getColor(x, y);
 			const color2 = DATA[TYPES.SNOW].getColor(x, y);
 			return Color.lerp(color1, color2, 0.5);	
 		}, 0.5, 0.2, (x, y) => {
 			solidUpdate(x, y, GRAVITY, 0, Element.tryMoveReference);
 		}, (x, y) => {
 			Element.setCell(x, y, grid[x][y].reference);
+			return true;
 		}, true),
 
 		[TYPES.STEEL]: new Element(1, (x, y) => {
@@ -1855,7 +1871,7 @@ try {
 			const top = Random.seedRand(x + y * 2000);
 			const bottom = Random.seedRand(x + (y + 1) * 2000);
 
-			return Color.lerp(new Color("#edc96706"), new Color("#d4af3706	"), top * (1 - yt) + bottom * yt);
+			return Color.lerp(new Color("#edc96706"), new Color("#d4af3706"), top * (1 - yt) + bottom * yt);
 			//return new Color("#ffff0001");
 		}, 0.6, 0.001, () => null, (x, y) => {
 			Element.setCell(x, y, TYPES.LIQUID_GOLD);

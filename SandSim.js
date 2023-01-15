@@ -2993,7 +2993,6 @@ try {
 									else if (brush === TYPES.AIR || Element.isEmpty(x, y))
 										Element.setCell(x, y, brush);
 								}
-
 							};
 							if (brushType == 0) { // Circle
 								for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
@@ -3051,10 +3050,11 @@ try {
 										const x = i + ox;
 										const y = j + oy;
 										if (Element.inBounds(x, y)) {
-											let id = grid[x][y].id;
-											if (DATA[id].reference)
-												id = grid[x][y].reference;
-											if (id === brush) Element.setCell(x, y, TYPES.AIR);
+											const { id } = grid[x][y];
+											if (
+												id === brush ||
+												(DATA[id].reference && grid[x][y].reference === brush)
+											) Element.setCell(x, y, TYPES.AIR);
 										}
 									}
 								}

@@ -294,6 +294,22 @@ try {
 			this.id = id;
 			this.updated = false;
 			this.vel = new Vector2(0, 0);
+			// delete this.vel.x;
+			// delete this.vel.y;
+			// let _x = 0, _y = 0;
+			// Object.defineProperties(this.vel, {
+			// 	x: {
+			// 		get: () => _x,
+			// 		set: a => _x = a
+			// 	},
+			// 	y: {
+			// 		get: () => _y,
+			// 		set: a => {
+			// 			if (this.id === TYPES.SMOKE && a) debugger;
+			// 			_y = a;
+			// 		}
+			// 	}
+			// });
 			this.acts = 0;
 			this.reference = 0;
 		}
@@ -1448,7 +1464,12 @@ try {
 					Element.isType(xN, yN, TYPES.BLUE_FIRE) ||
 					Element.isType(xN, yN, TYPES.POWER_LAVA) ||
 					Element.isType(xN, yN, TYPES.LIGHTNING)) {
-					if (Random.bool(.004)) Random.bool() ? makeCircle(x, y, Random.bool(.3) ? TYPES.FIRE : TYPES.BLUE_FIRE, Random.int(30, 50)) : makeCircle(x, y, TYPES.SMOKE, Random.int(15, 35));
+					if (Random.bool(.004)) {
+						if (Random.bool())
+							makeCircle(x, y, Random.bool(.3) ? TYPES.FIRE : TYPES.BLUE_FIRE, Random.int(30, 50))
+						else
+							makeCircle(x, y, TYPES.SMOKE, Random.int(15, 35));
+					}
 					if (Random.bool(.2)) explode(x, y, Random.int(20, 45));
 				}
 			});
@@ -1458,7 +1479,12 @@ try {
 					Element.isType(xN, yN, TYPES.BLUE_FIRE) ||
 					Element.isType(xN, yN, TYPES.POWER_LAVA) ||
 					Element.isType(xN, yN, TYPES.LIGHTNING)) {
-					if (Random.bool(.004)) Random.bool() ? makeCircle(x, y, Random.bool(.3) ? TYPES.FIRE : TYPES.BLUE_FIRE, Random.int(30, 50)) : makeCircle(x, y, TYPES.SMOKE, Random.int(15, 35));
+					if (Random.bool(.004)) {
+						if (Random.bool())
+							makeCircle(x, y, Random.bool(.3) ? TYPES.FIRE : TYPES.BLUE_FIRE, Random.int(30, 50));
+						else
+							makeCircle(x, y, TYPES.SMOKE, Random.int(15, 35));
+					}
 					if (Random.bool(.2)) explode(x, y, Random.int(20, 45));
 				}
 			});
@@ -1746,8 +1772,8 @@ try {
 			};
 			gasUpdate(x, y);
 			Element.updateCell(x, y);
-			
-			
+
+
 		}),
 
 		[TYPES.ICE]: new Element(1, [new Color("#93baed"), new Color("#a4c3eb"), new Color("#c0d4ed"), new Color("#b0caeb")], 0.5, 0.01, (x, y) => {
@@ -1767,7 +1793,7 @@ try {
 					reacted = true;
 				}
 			});
-			
+
 			solidUpdate(x, y);
 		}, (x, y) => {
 			Element.setCell(x, y, TYPES.WATER);
@@ -1778,7 +1804,7 @@ try {
 			const { reference } = grid[x][y];
 			const color1 = reference === TYPES.STAINED_SNOW ? Color.BLANK : DATA[reference].getColor(x, y);
 			const color2 = DATA[TYPES.SNOW].getColor(x, y);
-			return Color.lerp(color1, color2, 0.5);	
+			return Color.lerp(color1, color2, 0.5);
 		}, 0.5, 0.2, (x, y) => {
 			solidUpdate(x, y, GRAVITY, 0, Element.tryMoveReference);
 		}, (x, y) => {
@@ -2088,7 +2114,7 @@ try {
 			["#53f581", 30],
 			["#33d44e", 30],
 			["#42e35d", 30],
-			["#3fbf55 ", 1]
+			["#3fbf55", 1]
 		]), 0.05, .03, (x, y) => {
 			let shift = Random.bool(.9) ? 0 : Math.floor(Math.random() * 3) - 1;
 
@@ -2381,6 +2407,8 @@ try {
 					if (Element.isEmpty(x, y, CONDUCTIVE)) canConduct = true;
 					Element.tryBurn(x, y, TYPES.FIRE);
 				});
+
+				if (cell.id !== TYPES.ELECTRICITY) return;
 
 				if (!canConduct)
 					return Element.dereference(x, y);
@@ -3022,7 +3050,12 @@ try {
 									if (i * i + j * j < r * r) {
 										const x = i + ox;
 										const y = j + oy;
-										if (Element.inBounds(x, y) && Element.isType(x, y, brush)) Element.setCell(x, y, TYPES.AIR);
+										if (Element.inBounds(x, y)) {
+											let id = grid[x][y].id;
+											if (DATA[id].reference)
+												id = grid[x][y].reference;
+											if (id === brush) Element.setCell(x, y, TYPES.AIR);
+										}
 									}
 								}
 							}

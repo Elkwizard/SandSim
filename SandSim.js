@@ -3101,13 +3101,12 @@ try {
 					if (x >= WIDTH || y >= HEIGHT)
 						continue;
 					const cell = grid[x][y];
-					if (cell.id !== lastIds[x][y])
+					if (cell.id !== lastIds[x][y]) {
 						tex.setPixel(x, y, DATA[cell.id].getColor(x, y));
+						lastIds[x][y] = cell.id;
+					}
 				}
 			}
-
-			for (let i = 0; i < WIDTH; i++) for (let j = 0; j < HEIGHT; j++)
-				lastIds[i][j] = grid[i][j].id;
 
 			scene.camera.drawInWorldSpace(() => {
 				if (keyboard.justPressed("g")) RTX = !RTX;

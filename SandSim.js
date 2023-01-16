@@ -22,234 +22,6 @@ const controls = {
 	"g": "Toggle 'RTX'"
 };
 
-let RTX = true;
-
-const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
-	const godRays = new GPUShader(image.width / PIXEL_SIZE, image.height / PIXEL_SIZE, `
-		uniform int lightDistance;
-		uniform vec4 ambientLighting;
-		uniform vec4 lightColor;
-		uniform vec2 lightPosition;
-		uniform float lightIntensity;
-		uniform float localAttenuation;
-		uniform float globalAttenuation;
-		uniform float solidLightCutoff;
-		uniform bool clouds;
-		uniform float time;
-		uniform bool identity;
-
-		uniform sampler2D image;
-
-		highp float random11(highp float seed) {
-			highp float a = mod(seed * 6.12849, 8.7890975);
-			highp float b = mod(a * 256745.4758903, 232.567890);
-			return mod(abs(a * b), 1.0);
-		}
-
-		highp float random21(highp vec2 seed) {
-			return random11(seed.x + 3.238975 * seed.y + 5.237 * seed.x);
-		}
-
-		highp vec2 smoothT(highp vec2 t) {
-			return t * t * (-2.0 * t + 3.0);
-		} 
-
-		highp float perlin(highp vec2 seed) {
-			highp vec2 samplePoint = floor(seed);
-			highp float a = random21(samplePoint);
-			highp float b = random21(samplePoint + vec2(1.0, 0.0));
-			highp float c = random21(samplePoint + vec2(0.0, 1.0));
-			highp float d = random21(samplePoint + vec2(1.0));
-			highp vec2 t = smoothT(mod(seed, 1.0));
-			return mix(mix(a, b, t.x), mix(c, d, t.x), t.y);
-		}
-		highp float octavePerlin(highp vec2 seed) {
-			seed += 10.0;
-			highp float sum = 0.0;
-			highp float scale = 0.0;
-			for (highp float o = 0.0; o < 20.0; o++) {
-				highp float i = o + 1.0;
-				sum += perlin(seed * i) / i;
-				scale += 1.0 / i;
-			}
-			return sum / scale;
-		}
-
-		float getClouds(vec2 pos) {
-			float oc = clamp(octavePerlin(pos * vec2(14.0, 12.0)) - 0.1, 0.0, 1.0);
-			float pr = perlin(vec2(pos.x, 0.0) * 0.01);
-			float yCutoff = mix(0.5, 0.7, pr);
-			float cutoffFactor = smoothstep(yCutoff + 0.3, yCutoff - 0.1, pos.y);
-			float t = clamp(pow(oc * 2.0, 3.5) * cutoffFactor, 0.0, 1.0);
-			return mix(0.0, oc, t);
-		}
-
-		vec4 getPixel(vec2 uv) {
-			vec2 imageRes = vec2(textureSize(image, 0));
-			return texelFetch(image, ivec2(uv * imageRes), 0);
-		}
-
-		bool light(vec2 uv) {
-			vec4 color = getPixel(uv);
-			return color.a == 0.0;
-		}
-
-		float getFactor(float distance, float attn) {
-			return clamp(1.0 / pow(distance * attn + 1.0, 2.0) - 0.05, 0.0, 1.0);
-		}
-
-		vec4 getDirectionalLight(vec2 uv) {
-			if (light(uv)) return vec4(1.0);
-			
-			float distance = 100000.0;
-
-			vec2 lightDirection = normalize(position - lightPosition);
-			
-
-			for (int i = 0; i < lightDistance; i++) {
-				float fi = float(i);
-				vec2 guv = uv - lightDirection * fi / resolution;
-				if (light(guv)) {
-					distance = (fi + 2.0) * float(${DISTANCE_SCALE});
-					break;
-				}
-			}
-
-			float globalDistance = max(0.0, length(position - lightPosition) - solidLightCutoff);
-			float globalFalloff = getFactor(globalDistance, globalAttenuation);
-			float localFalloff = getFactor(distance, localAttenuation);
-
-			return lightColor * lightIntensity * globalFalloff * localFalloff;
-		}
-
-		// stolen from websites and whatnot
-		vec3 ACESFilm(vec3 x) {
-			float a = 2.51f;
-			float b = 0.03f;
-			float c = 2.43f;
-			float d = 0.59f;
-			float e = 0.14f;
-			return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
-		}
-
-		float normal(float seed, float mu, float sd) {
-			float area = random11(seed);
-			return mu + sd * log(1.0 / area - 1.0) / -1.8;
-		}
-
-		bool glows(vec4 color) {
-			return color.a > 1.0 / 255.0;
-		}
-
-		vec4 _shader_() {
-			const int SAMPLES = 50;
-			
-			float seed = position.x * 212.8 + position.y * 12847.2;// + time;
-			
-			vec4 albedo = getPixel(position / resolution);
-			bool bloom = albedo == vec4(0.0);
-			float attenuationFactor = bloom ? 1.0 : 0.0;
-			float sampleSD = bloom ? 3.0 : 20.0;
-			vec3 directionalLighting = vec3(0.0);
-
-			float totalAttn = 0.0;
-
-			for (int i = 0; i < SAMPLES; i++) {
-				vec2 pos = vec2(
-					normal(seed, position.x, sampleSD),
-					normal(seed + 23019287.2, position.y, sampleSD)
-				);
-
-				seed += 12.13;
-
-				vec4 color = getPixel(pos / resolution);
-				
-				vec2 v = pos - position;
-				float d2 = dot(v, v);
-				float attn = 1.0 / (1.0 + attenuationFactor * d2);
-				totalAttn += attn;
-				
-				if (glows(color))
-					directionalLighting += color.rgb * color.a * attn;
-			}
-			
-
-			vec3 hdr;
-			if (albedo == vec4(0.0)) hdr = albedo.rgb + directionalLighting;
-			else if (glows(albedo)) hdr = (albedo * ambientLighting + vec4(directionalLighting, 1.0)).rgb; 
-			else hdr = (albedo * (ambientLighting + vec4(directionalLighting, 1.0))).rgb;
-			
-
-			return vec4(hdr, 1.0);
-		}
-
-		vec4 shader() {
-			if (identity) {
-				return vec4(getPixel(position / resolution).rgb, 1.0);
-			}
-			
-			time;
-
-			vec2 uv = position / resolution;
-			vec4 directional = getDirectionalLight(uv);
-			vec4 albedo = getPixel(uv);
-			if (clouds && light(uv)) {
-				float clouds = getClouds(vec2(uv.x + time * 0.0007, uv.y));
-				return vec4(1.0, 1.0, 1.0, clouds);
-			}
-
-			int S = 6; // perfect possible value, 1 / (1 + 16^2) < 1 / 255
-			int T = 1;
-			vec4 glow = vec4(0.0);
-			for (int i = -S; i <= S; i += T)
-			for (int j = -S; j <= S; j += T) {
-				vec2 off = vec2(i, j);
-				vec4 px = getPixel((position + off) / resolution);
-				glow += vec4(px.rgb * px.a, px.a) / (1.0 + dot(off, off));
-			}
-			
-			albedo *= (ambientLighting + directional);
-			
-			vec3 hdr = albedo.rgb + glow.rgb;
-
-			// hdr = 1.0 / (1.0 + exp(-5.0 * (hdr - 0.5)));
-			// hdr = ACESFilm(hdr);
-
-			return vec4(hdr, 1.0);
-		}
-	`);
-
-
-	return function ({
-		direction,
-		position = direction.times(1),
-		color = new Color(255, 255, 255),
-		ambient = new Color(20, 20, 20),
-		intensity = 2,
-		attenuation = direction ? 0 : 0.1,
-		solidUntil = 0,
-		clouds = false,
-		identity = false,
-	}) {
-		godRays.setArguments({
-			image,
-			clouds,
-			time: intervals.frameCount,
-			lightColor: color,
-			ambientLighting: ambient,
-			lightPosition: position.over(DISTANCE_SCALE),
-			lightIntensity: intensity,
-			lightDistance: 200 / DISTANCE_SCALE,
-			globalAttenuation: attenuation,
-			localAttenuation: 0.03,
-			solidLightCutoff: solidUntil / DISTANCE_SCALE,
-			identity
-		});
-
-		return godRays;
-	};
-};
-
 canvas.clearScreen = () => renderer.fill(Color.BLACK);
 
 const TYPES = Object.fromEntries([
@@ -436,11 +208,12 @@ const NUM_TYPES = Object.entries(TYPES).length;
 
 let pos = true;
 
+let number = 0;
+
 class Element {
 	static DEFAULT_PASS_THROUGH = new Set([TYPES.AIR]);
 	constructor(alpha, color, resistance = 0, flammability = 0, update = () => null, onburn = () => null, reference = false) {
-		this.color = color;
-
+		
 		if (typeof resistance === "function")
 			this.getResistance = resistance;
 		else this.resistance = resistance;
@@ -449,16 +222,23 @@ class Element {
 		this.onburn = onburn;
 
 		if (typeof color === "function") {
-			this.getColor = color;
+			this.getColorInternal = color;
 		} else {
-			this.multipleColors = Array.isArray(this.color);
+			this.multipleColors = Array.isArray(color);
 			alpha /= 255;
 			if (this.multipleColors)
-				this.color = this.color.map(color => Color.alpha(color, alpha));
+				this.color = color.map(color => Color.alpha(color, alpha));
 			else this.color = Color.alpha(color, alpha);
 		}
 		this.update = update;
 		this.reference = reference;
+
+		this.textureCache = !this.reference && !this.color;
+		if (this.textureCache) {
+			number++;
+			this.tex = new Texture(WIDTH, HEIGHT);
+			this.colorCached = Array.dim(WIDTH, HEIGHT);
+		}
 	}
 
 	getResistance(x, y) {
@@ -466,6 +246,17 @@ class Element {
 	}
 
 	getColor(x, y) {
+		if (this.textureCache) {
+			if (!this.colorCached[x][y]) {
+				this.tex.setPixel(x, y, this.getColorInternal(x, y));
+				this.colorCached[x][y] = true;
+			}
+			return this.tex.getPixel(x, y);
+		}
+		return this.getColorInternal(x, y);
+	}
+
+	getColorInternal(x, y) {
 		if (this.multipleColors) return Random.choice(this.color);
 		return this.color;
 	}
@@ -816,7 +607,7 @@ const GRAVITY = 0.5 / CELL;
 const DISPERSION = 4;
 
 const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT]);
-const LIQUID = new Set([TYPES.WATER, TYPES.BLOOD, TYPES.ESTIUM, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_GOLD, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_MAX, TYPES.SALT_WATER]);
+const LIQUID = new Set([TYPES.WATER, TYPES.BLOOD, TYPES.ESTIUM, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
 const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE, TYPES.PARTICLE]);
 const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, ...GAS]);
 const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL, TYPES.ESTIUM]);
@@ -1096,8 +887,6 @@ const DATA = {
 		Element.tryMove(x, y, Math.round(x + v.x), Math.round(y + v.y), SOLID_PASS_THROUGH)
 
 	}),
-
-	[TYPES.ENDOTHERMIA]: new Element(1, Color.BLUE),
 
 	[TYPES.EXOTHERMIA]: new Element(1, (x, y) => {
 		if (y == 0) return new Color("#b5193b");
@@ -2837,6 +2626,268 @@ let debugFrame;
 
 const tex = new Texture(WIDTH, HEIGHT);
 
+const idTex = new Texture(WIDTH, HEIGHT).shader((x, y, dest) => dest.set(Color.BLANK));
+
+let RTX = true;
+
+const randomlib = `
+float random11(float seed) {
+	float a = mod(seed * 6.12849, 8.7890975);
+	float b = mod(a * 256745.4758903, 232.567890);
+	return mod(abs(a * b), 1.0);
+}
+
+float random21(vec2 seed) {
+	return random11(seed.x + 3.238975 * seed.y + 5.237 * seed.x);
+}
+
+vec2 smoothT(vec2 t) {
+	return t * t * (-2.0 * t + 3.0);
+} 
+
+float perlin(vec2 seed) {
+	vec2 samplePoint = floor(seed);
+	float a = random21(samplePoint);
+	float b = random21(samplePoint + vec2(1.0, 0.0));
+	float c = random21(samplePoint + vec2(0.0, 1.0));
+	float d = random21(samplePoint + vec2(1.0));
+	vec2 t = smoothT(mod(seed, 1.0));
+	return mix(mix(a, b, t.x), mix(c, d, t.x), t.y);
+}
+float octavePerlin(vec2 seed) {
+	seed += 10.0;
+	float sum = 0.0;
+	float scale = 0.0;
+	for (float o = 0.0; o < 20.0; o++) {
+		float i = o + 1.0;
+		sum += perlin(seed * i) / i;
+		scale += 1.0 / i;
+	}
+	return sum / scale;
+}
+`;
+
+const DISTORTED = [TYPES.LAVA, ...LIQUID];
+
+const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
+	const godRays = new GPUShader(image.width / PIXEL_SIZE, image.height / PIXEL_SIZE, `
+		uniform int lightDistance;
+		uniform vec4 ambientLighting;
+		uniform vec4 lightColor;
+		uniform vec2 lightPosition;
+		uniform float lightIntensity;
+		uniform float localAttenuation;
+		uniform float globalAttenuation;
+		uniform float solidLightCutoff;
+		uniform bool clouds;
+		uniform float time;
+		uniform bool identity;
+
+		uniform sampler2D image;
+		uniform sampler2D ids;
+
+		${randomlib}
+
+		float getClouds(vec2 pos) {
+			float oc = clamp(octavePerlin(pos * vec2(14.0, 12.0)) - 0.1, 0.0, 1.0);
+			float pr = perlin(vec2(pos.x, 0.0) * 0.01);
+			float yCutoff = mix(0.5, 0.7, pr);
+			float cutoffFactor = smoothstep(yCutoff + 0.3, yCutoff - 0.1, pos.y);
+			float t = clamp(pow(oc * 2.0, 3.5) * cutoffFactor, 0.0, 1.0);
+			return mix(0.0, oc, t);
+		}
+
+		int getId(vec2 p) {
+			return int(texelFetch(ids, ivec2(p), 0).r * 255.0);
+		}
+
+		vec4 getPixelTexture(vec2 uv) {
+			vec2 imageRes = vec2(textureSize(image, 0));
+			vec2 p = uv * imageRes;
+			vec2 prevP = p;
+
+			// distortion
+			int id = getId(p);
+			if (${DISTORTED.map(id => `id == ${id}`).join(" || ")}) {
+				float noise = perlin(p * 0.1) * 0.3;
+				p.x += 2.0 * sin(time * 0.03 + p.y * 0.1 + noise);
+				p.y += 2.0 * perlin(p + time * 0.01 + p.x * 0.05 + noise);
+			}
+
+			if (id != getId(p)) p = prevP;
+
+			vec4 color = texelFetch(image, ivec2(p), 0);
+			// color.a = 1.0 - color.a;
+			return color;
+		}
+
+		vec4 getPixel(vec2 uv) {
+			vec2 imageRes = vec2(textureSize(image, 0));
+			return texelFetch(image, ivec2(uv * imageRes), 0);
+		}
+
+		bool light(vec2 uv) {
+			vec4 color = getPixel(uv);
+			return color.a == 0.0;
+		}
+
+		float getFactor(float distance, float attn) {
+			return clamp(1.0 / pow(distance * attn + 1.0, 2.0) - 0.05, 0.0, 1.0);
+		}
+
+		vec4 getDirectionalLight(vec2 uv) {
+			if (light(uv)) return vec4(1.0);
+			
+			float distance = 100000.0;
+
+			vec2 lightDirection = normalize(position - lightPosition);
+			
+
+			for (int i = 0; i < lightDistance; i++) {
+				float fi = float(i);
+				vec2 guv = uv - lightDirection * fi / resolution;
+				if (light(guv)) {
+					distance = (fi + 2.0) * float(${DISTANCE_SCALE});
+					break;
+				}
+			}
+
+			float globalDistance = max(0.0, length(position - lightPosition) - solidLightCutoff);
+			float globalFalloff = getFactor(globalDistance, globalAttenuation);
+			float localFalloff = getFactor(distance, localAttenuation);
+
+			return lightColor * lightIntensity * globalFalloff * localFalloff;
+		}
+
+		// stolen from websites and whatnot
+		vec3 ACESFilm(vec3 x) {
+			float a = 2.51f;
+			float b = 0.03f;
+			float c = 2.43f;
+			float d = 0.59f;
+			float e = 0.14f;
+			return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
+		}
+
+		float normal(float seed, float mu, float sd) {
+			float area = random11(seed);
+			return mu + sd * log(1.0 / area - 1.0) / -1.8;
+		}
+
+		bool glows(vec4 color) {
+			return color.a > 1.0 / 255.0;
+		}
+
+		vec4 _shader_() {
+			const int SAMPLES = 50;
+			
+			float seed = position.x * 212.8 + position.y * 12847.2;// + time;
+			
+			vec4 albedo = getPixelTexture(position / resolution);
+			bool bloom = albedo == vec4(0.0);
+			float attenuationFactor = bloom ? 1.0 : 0.0;
+			float sampleSD = bloom ? 3.0 : 20.0;
+			vec3 directionalLighting = vec3(0.0);
+
+			float totalAttn = 0.0;
+
+			for (int i = 0; i < SAMPLES; i++) {
+				vec2 pos = vec2(
+					normal(seed, position.x, sampleSD),
+					normal(seed + 23019287.2, position.y, sampleSD)
+				);
+
+				seed += 12.13;
+
+				vec4 color = getPixel(pos / resolution);
+				
+				vec2 v = pos - position;
+				float d2 = dot(v, v);
+				float attn = 1.0 / (1.0 + attenuationFactor * d2);
+				totalAttn += attn;
+				
+				if (glows(color))
+					directionalLighting += color.rgb * color.a * attn;
+			}
+			
+
+			vec3 hdr;
+			if (albedo == vec4(0.0)) hdr = albedo.rgb + directionalLighting;
+			else if (glows(albedo)) hdr = (albedo * ambientLighting + vec4(directionalLighting, 1.0)).rgb; 
+			else hdr = (albedo * (ambientLighting + vec4(directionalLighting, 1.0))).rgb;
+			
+
+			return vec4(hdr, 1.0);
+		}
+
+		vec4 shader() {
+			if (identity) {
+				vec4 col = texelFetch(image, ivec2(position), 0);
+				return vec4(col.rgb, 1.0);
+			}
+
+			vec2 uv = position / resolution;
+			vec4 directional = getDirectionalLight(uv);
+			vec4 albedo = getPixelTexture(uv);
+			if (clouds && light(uv)) {
+				float clouds = getClouds(vec2(uv.x + time * 0.0007, uv.y));
+				return vec4(1.0, 1.0, 1.0, clouds);
+			}
+
+			int S = 6; // perfect possible value, 1 / (1 + 16^2) < 1 / 255
+			int T = 1;
+			vec4 glow = vec4(0.0);
+			for (int i = -S; i <= S; i += T)
+			for (int j = -S; j <= S; j += T) {
+				vec2 off = vec2(i, j);
+				vec4 px = getPixel((position + off) / resolution);
+				glow += vec4(px.rgb * px.a, px.a) / (1.0 + dot(off, off));
+			}
+			
+			albedo *= (ambientLighting + directional);
+			
+			vec3 hdr = albedo.rgb + glow.rgb;
+
+			// hdr = 1.0 / (1.0 + exp(-5.0 * (hdr - 0.5)));
+			// hdr = ACESFilm(hdr);
+
+			return vec4(hdr, 1.0);
+		}
+	`);
+
+
+	return function ({
+		direction,
+		position = direction.times(1),
+		color = new Color(255, 255, 255),
+		ambient = new Color(20, 20, 20),
+		intensity = 2,
+		attenuation = direction ? 0 : 0.1,
+		solidUntil = 0,
+		clouds = false,
+		identity = false,
+		ids
+	}) {
+		godRays.setArguments({
+			image,
+			clouds,
+			time: intervals.frameCount,
+			lightColor: color,
+			ambientLighting: ambient,
+			lightPosition: position.over(DISTANCE_SCALE),
+			lightIntensity: intensity,
+			lightDistance: 200 / DISTANCE_SCALE,
+			globalAttenuation: attenuation,
+			localAttenuation: 0.03,
+			solidLightCutoff: solidUntil / DISTANCE_SCALE,
+			identity,
+			ids
+		});
+
+		return godRays;
+	};
+};
+
 const rays = createGodRays(tex, 1, 1);
 
 function lastBrush() {
@@ -3117,7 +3168,7 @@ intervals.continuous(time => {
 
 		}
 
-		// const col = new Color(0, 0, 0, 0);
+		const col = new Color(0, 0, 0, 1);
 
 		for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
 			const chunk = chunks[i][j];
@@ -3133,9 +3184,11 @@ intervals.continuous(time => {
 					continue;
 				const cell = grid[x][y];
 				if (cell.id !== lastIds[x][y]) {
-					// col.red = cell.id;
-					// tex.setPixel(x, y, col);//
-					tex.setPixel(x, y, DATA[cell.id].getColor(x, y));
+					col.red = cell.id;
+					const element = DATA[cell.id];
+					tex.setPixel(x, y, element.getColor(x, y));
+					col.red = cell.id;
+					idTex.setPixel(x, y, col);
 					lastIds[x][y] = cell.id;
 				}
 			}
@@ -3148,10 +3201,11 @@ intervals.continuous(time => {
 				direction: new Vector2(100000, -100000),//lightSources[0][0], lightSources[0][1]),
 				color: new Color(105, 105, 50),
 				ambient: new Color(200, 200, 200),
-				identity: !RTX
+				identity: !RTX,
+				ids: idTex
 			});
 			renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
-
+			
 			// brush previews
 			const brushPreviewArgs = [Color.LIME, 1 / scene.camera.zoom];
 			const cellBrushSize = brushSize * CELL;
@@ -3276,7 +3330,7 @@ intervals.continuous(time => {
 
 		if (!SELECTORS_SHOWN) {
 			renderer.textMode = TextMode.TOP_LEFT;
-			text(Font.Arial20, `brush: ${typeName(brush)}, brushSize: ${brushSize}, brushType: ${BRUSH_TYPES[brushType]} | ${brushType}, paused: ${paused}, fps: ${intervals.fps}`, 10, 10);
+			text(Font.Arial20, `brush: ${typeName(brush)}, brushSize: ${brushSize}, brushType: ${BRUSH_TYPES[brushType]} | ${brushType}, paused: ${paused}, RTX: ${RTX}, fps: ${intervals.fps}`, 10, 10);
 			renderer.textMode = TextMode.TOP_RIGHT;
 			text(Font.Arial15, hoveredElementType ? typeName(hoveredElementType) + (hoveredElementActs ? " (" + hoveredElementActs + ")" : "") : "", width - 10, 10);
 		}

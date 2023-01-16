@@ -233,7 +233,7 @@ class Element {
 		this.update = update;
 		this.reference = reference;
 
-		this.textureCache = !this.reference && !this.color;
+		this.textureCache = !(this.reference || this.color);
 		if (this.textureCache) {
 			number++;
 			this.tex = new Texture(WIDTH, HEIGHT);

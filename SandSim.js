@@ -31,7 +31,9 @@ const TYPES = Object.fromEntries([
 	"SOIL", "DAMP_SOIL", "ROOT", "GRASS", "FLOWER",
 	"HIGH_EXPLOSIVE", "EXPLOSIVE", "EXPLOSIVE_DUST",
 	"STONE", "CONDENSED_STONE", "MARBLE",
-	"CLAY", "BRICK",
+	"CLAY", "BRICK", 
+	"TILE_BASE", "DECUMAN_TILE",
+	"GLAZE_BASE", "DECUMAN_GLAZE",
 	"PRIDIUM", "GENDERFLUID",
 	"PARTICLE",
 	"EXOTHERMIA", "FIRE", "BLUE_FIRE",
@@ -607,7 +609,7 @@ const GRAVITY = 0.5 / CELL;
 const DISPERSION = 4;
 
 const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT]);
-const LIQUID = new Set([TYPES.WATER, TYPES.BLOOD, TYPES.ESTIUM, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
+const LIQUID = new Set([TYPES.WATER, TYPES.BLOOD, TYPES.ESTIUM, TYPES.DECUMAN_GLAZE, TYPES.GLAZE_BASE, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
 const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE, TYPES.PARTICLE]);
 const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, ...GAS]);
 const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL, TYPES.ESTIUM]);
@@ -616,6 +618,7 @@ const SOLID_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, ...LIQUID]);
 const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASS_THROUGH, TYPES.PARTICLE]);
 const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
+const GLAZE_TYPES = new Set([TYPES.GLAZE_BASE, TYPES.DECUMAN_GLAZE])
 const ANT_UNSTICKABLE = new Set([TYPES.GENDERFLUID, TYPES.COPPER, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.IRON, TYPES.LIQUID_IRON, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.MUSCLE, ...WATER_TYPES]);
 const CONDUCTIVE = new Set([TYPES.GENDERFLUID, TYPES.LIGHT_SAD, TYPES.COPPER, TYPES.GOLD, TYPES.AUREATE_DUST, TYPES.LIQUID_GOLD, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.IRON, TYPES.MUSCLE, ...WATER_TYPES]);
 const ELECTRICITY_PASSTHROUGH = new Set([...CONDUCTIVE, TYPES.ELECTRICITY]);
@@ -1700,10 +1703,7 @@ const DATA = {
 
 	[TYPES.LIQUID_GOLD]: new Element(50, (x, y) => {
 		let t = Random.perlin(x + .2 * y);
-		if (t > .5) {
-			return new Color("#ad853e1d");
-		}
-		//else if (t > .45) return new Color("#f9f29516")
+		if (t > .5) return new Color("#ad853e1d");
 		else if (t > .1) return new Color("#916c341d");
 		else return new Color("#edc9672d");
 	}, 0.55, 0, (x, y) => {
@@ -2353,9 +2353,80 @@ const DATA = {
 				0, 1, 0.5, 1.3
 			)
 		);
-	}, 0.5),
+	}, 0.5, 0, (x, y) => {
+		Element.consumeReact(x, y, TYPES.GLAZE_BASE, TYPES.TILE_BASE)
+		Element.consumeReact(x, y, TYPES.DECUMAN_GLAZE, TYPES.DECUMAN_TILE)
+
+	}),
 	[TYPES.CLAY]: new Element(1, [new Color("#9c8b79"), new Color("#a8987d")], 0.4, 0.2, solidUpdate, (x, y) => {
 		Element.setCell(x, y, TYPES.BRICK);
+		return true;
+	}),
+	[TYPES.TILE_BASE]: new Element(1, (x, y) => {
+		if(x % 20 == 0 || y % 20 == 0) return new Color("#918b8401");
+		if(x % 20 == 19 || y % 20 == 1) return new Color("#f2efeb01");
+		else return new Color(Random.choice(["#c4bdb701", "#cfc9c401", "#bab1a901"]));
+	}, 0.6, 0, (x, y) => {
+		if (Element.isType(x, y - 1, TYPES.GLAZE_BASE))
+			Element.permeate(x, y, TYPES.TILE_BASE, TYPES.BRICK, TYPES.GLAZE_BASE, 2);
+	}),
+	[TYPES.DECUMAN_TILE]: new Element(1, (x, y) => {
+		if(x % 60 == 0 || y % 60 == 0) return new Color("#26435901");
+		if(x % 60 == 59 || y % 60 == 1) return new Color("#6888a101");
+		if((x % 60 !== 0 && Math.ceil(x / 60) % 2 == 0) && (y % 60 !== 0 && Math.ceil(y / 60) % 2 == 0)){
+			let cx = Math.ceil(x / 60)*60 - 30;
+			let cy = Math.ceil(y / 60)*60 - 30;
+			let angle = (Math.atan2(cy-y, cx-x) + Math.PI);
+			let dist = Math.sqrt((cx-x)**2 + (cy-y)**2);
+			if(dist < 3) return new Color("#446a8701") 
+			let f = false;
+			for(let i = 0; i < Math.PI*2; i += Math.PI/2){
+				if (angle >= i && angle <= Math.PI/5 + i){
+					f = true;
+					return Color.lerp(new Color("#446a8701"), new Color(Random.choice(["#b2c4d101", "#a8b6bf01"])), dist / 30);
+				}
+			}
+			if(!f) return new Color(Random.choice(["#b2c4d101", "#a8b6bf01"]))
+		}
+
+		if(x % 15 == 0 || y % 15 == 0) return new Color("#26435901");
+		if(x % 15 == 14 || y % 15 == 1) return new Color("#6888a101");
+		else return new Color(Random.choice(["#446a8701", "#395a7301", "#385e7a01"]));
+	}, 0.6, 0, (x, y) => {
+		if (Element.isType(x, y - 1, TYPES.DECUMAN_GLAZE))
+			Element.permeate(x, y, TYPES.DECUMAN_TILE, TYPES.BRICK, TYPES.DECUMAN_GLAZE, 2);
+	}),
+	[TYPES.GLAZE_BASE]: new Element(1, (x, y) => {
+		const angle = Random.perlin2D(x, y, 0.0005) * Math.PI * 2;
+		const vec = new Vector2(x, y).rotate(angle);
+		const mod = (a, b) => (a % b + b) % b;
+		return mod(vec.y, 2) < 1 ? new Color("#dfebf501") : new Color(Random.bool() ? "#dce0e301" : "#cfd0d101");
+	}, 0.4, 0.05, (x, y) => {
+		liquidUpdate(x, y)
+		Element.consumeReactMany(x, y, WATER_TYPES, TYPES.DECUMAN_GLAZE);
+	}, (x, y) => {
+		Element.setCell(x, y, TYPES.SMOKE);
+		return true;
+	}),
+	[TYPES.DECUMAN_GLAZE]: new Element(1, (x, y) => {
+		const angle = Random.perlin2D(x, y, 0.005)* Math.PI * 2;
+		const vec = new Vector2(x, y).rotate(angle);
+		const mod = (a, b) => (a % b + b) % b;
+		let c1 = mod(vec.y, 5) < 1 ? new Color("#93afc401") : new Color(Random.bool() ? "#446a8701" : "#2f547001");
+
+		let c2;
+		let t = Random.perlin(x - .6 * y + Math.round(Random.range(-2, 2)));
+		if (t > .6) c2 = new Color("#446a8701");
+		else if (t > .2) c2 = new Color("#2f547001")
+		else if (t > .1) c2 = new Color("#c7c5c501");
+		else c2 = new Color("#93afc401");
+
+		return Color.lerp(c1, c2, .5);
+	}, 0.4, 0.05, (x, y) => {
+		liquidUpdate(x, y)
+		Element.react(x, y, TYPES.GLAZE_BASE, TYPES.DECUMAN_GLAZE)
+	}, (x, y) => {
+		Element.setCell(x, y, TYPES.SMOKE);
 		return true;
 	}),
 	[TYPES.RADIUM]: new Element(1, (x, y) => {

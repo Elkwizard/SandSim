@@ -2667,7 +2667,7 @@ float octavePerlin(vec2 seed) {
 }
 `;
 
-const DISTORTED = [TYPES.LAVA, ...LIQUID];
+const DISTORTED = [TYPES.LAVA, TYPES.POWER_LAVA, ...LIQUID];
 
 const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
 	const godRays = new GPUShader(image.width / PIXEL_SIZE, image.height / PIXEL_SIZE, `

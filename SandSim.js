@@ -274,6 +274,80 @@ class Element {
 		}
 	}
 
+	static onLine(x, y, x1, y1, x2, y2){
+		if(!(x >= Math.min(x1, x2) && x <= Math.max(x1, x2) && y >= Math.min(y1, y2) && y <= Math.max(y1, y2))) return false;
+
+		let N = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1))
+		let ox;
+		let oy;
+		for (let step = 0; step <= N; step++) {
+			let t = N === 0 ? 0.0 : step / N;
+			ox = Math.round(x1 * (1.0 - t) + t * x2);
+			oy = Math.round(y1 * (1.0 - t) + t * y2);
+			if(x == ox && y == oy) return true;
+		}
+		return false;
+	}
+
+	static inCircle(x, y, x1, y1, r){
+		return (Math.sqrt((x-x1)**2 + (y-y1)**2) <= r)
+	}
+
+	static onRing(x, y, x1, y1, r){
+		return this.inCircle(x, y, x1, y1, r) && !this.inCircle(x, y, x1, y1, r-1)
+	}
+
+	static inRect(x, y, x1, y1, x2, y2){
+		return (x >= x1 && x <= x2 && y >= y1 && y <= y2);
+	}
+
+	static inTriangle(x, y, x1, y1, x2, y2, x3, y3){
+		let xMin = Math.min(x1, Math.min(x2, x3));
+		let xMax = Math.max(x1, Math.max(x2, x3));
+		let yMin = Math.min(y1, Math.min(y2, y3));
+		let yMax = Math.max(y1, Math.max(y2, y3));
+		if(!(x >= xMin && x <= xMax && y >= yMin && y <= yMax)) return false;
+
+		let N = Math.max(Math.abs(x3 - x2), Math.abs(y3 - y2))
+		let ox;
+		let oy;
+		for (let step = 0; step <= N; step++) {
+			let t = N === 0 ? 0.0 : step / N;
+			ox = Math.round(x2 * (1.0 - t) + t * x3);
+			oy = Math.round(y2 * (1.0 - t) + t * y3);
+			if(this.onLine(x, y, x1, y1, ox, oy)) return true;
+		}
+		return false;
+	}
+
+	static inRhombus(x, y, x1, y1, width, height, angle){
+		if(!(x >= x1-width/2 && x <= x1+width/2 && y >= y1-height/2 && y <= y1+height/2)) return false;
+		const c = Math.cos(angle);
+		const s = Math.sin(angle);
+		const rotate = (x1, y1, angle) => [Math.cos(angle) * x1 - Math.sin(angle) * y1, Math.sin(angle) * x1 + Math.cos(angle) * y1];
+		const points = [
+			rotate(-width / 2, -height / 2, angle),
+			rotate(width / 2, -height / 2, angle),
+			rotate(-width / 2, height / 2, angle),
+			rotate(width / 2, height / 2, angle)];
+		const minX = Math.floor(Math.min(...points.map(point => point[0])));
+		const maxX = Math.round(Math.max(...points.map(point => point[0])));
+		const minY = Math.floor(Math.min(...points.map(point => point[1])));
+		const maxY = Math.round(Math.max(...points.map(point => point[1])));
+
+		for (let i = minX; i <= maxX; i++) {
+			for (let j = minY; j <= maxY; j++) {
+				let [ox, oy] = rotate(i, j, -angle);
+				ox = Math.abs(ox) / (width / 2);
+				oy = Math.abs(oy) / (height / 2);
+
+				if (oy <= 1 - ox)
+					if(Math.round(i + x1) == x && Math.round(j + y1) == y) return true;
+			}
+		}
+		return false;
+	}
+
 	static getNeighborsOfType(x, y, id) {
 		return [
 			Element.isType(x, y - 1, id),
@@ -2368,7 +2442,7 @@ const DATA = {
 		else return new Color(Random.choice(["#c4bdb701", "#cfc9c401", "#bab1a901"]));
 	}, 0.6, 0, (x, y) => {
 		if (Element.isType(x, y - 1, TYPES.GLAZE_BASE))
-			Element.permeate(x, y, TYPES.TILE_BASE, TYPES.BRICK, TYPES.GLAZE_BASE, 2);
+			Element.permeate(x, y, TYPES.TILE_BASE, TYPES.BRICK, TYPES.GLAZE_BASE, 4);
 	}),
 	[TYPES.DECUMAN_TILE]: new Element(1, (x, y) => {
 		if(x % 60 == 0 || y % 60 == 0) return new Color("#26435901");
@@ -2394,7 +2468,7 @@ const DATA = {
 		else return new Color(Random.choice(["#446a8701", "#395a7301", "#385e7a01"]));
 	}, 0.6, 0, (x, y) => {
 		if (Element.isType(x, y - 1, TYPES.DECUMAN_GLAZE))
-			Element.permeate(x, y, TYPES.DECUMAN_TILE, TYPES.BRICK, TYPES.DECUMAN_GLAZE, 2);
+			Element.permeate(x, y, TYPES.DECUMAN_TILE, TYPES.BRICK, TYPES.DECUMAN_GLAZE, 4);
 	}),
 	[TYPES.GLAZE_BASE]: new Element(1, (x, y) => {
 		const angle = Random.perlin2D(x, y, 0.0005) * Math.PI * 2;

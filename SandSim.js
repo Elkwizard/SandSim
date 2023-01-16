@@ -440,11 +440,9 @@ class Element {
 		return chunks[cx][cy].sleep;
 	}
 
-	static toWake = [];
-
 	static updateCell(x, y) {
 		const S = 1;
-		for (let i = -S; i <= S; i++) for (let j = -S; j <= S; j++) {
+		for (let i = -S; i <= S; i += 2) for (let j = -S; j <= S; j += 2) {
 			const X = x + i;
 			const Y = y + j;
 			if (!Element.inBounds(X, Y))
@@ -452,10 +450,7 @@ class Element {
 			const cx = ~~(X / CHUNK);
 			const cy = ~~(Y / CHUNK);
 			const chunk = chunks[cx][cy];
-			if (chunk.sleepNext) {
-				chunk.sleepNext = false;
-				Element.toWake.push(chunk);
-			}
+			chunk.sleepNext = false;
 		}
 	}
 
@@ -3233,10 +3228,6 @@ intervals.continuous(time => {
 			if (chunk.sleep) continue;
 
 			processChunk(chunk);
-
-			while (Element.toWake.length)
-				processChunk(Element.toWake.pop());
-
 		}
 
 		const col = new Color(0, 0, 0, 1);

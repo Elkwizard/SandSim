@@ -3182,7 +3182,6 @@ intervals.continuous(time => {
 							}
 						};
 						if (brushType == 0) { // Circle
-							makeLine(ox, oy, oxl, oyl, brush, r);
 							for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 								if (i * i + j * j < r * r) {
 									const x = i + ox;
@@ -3209,8 +3208,6 @@ intervals.continuous(time => {
 							}
 						}
 						else if (brushType == 3) { // Forceful
-							makeLine(ox, oy, oxl, oyl, brush, r);
-							makeLine(ox, oy, oxl, oyl, "explode", r);
 							for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 								if (i * i + j * j < r * r) {
 									const x = i + ox;
@@ -3222,7 +3219,6 @@ intervals.continuous(time => {
 						}
 						else if (brushType == 4) { // Row
 							let disp = oy-oyl;
-							makeLine(0, oyl + ~~(disp/2), WIDTH, oyl + ~~(disp/2), brush, Math.abs(~~disp));
 							for (let i = 0; i <= WIDTH; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
 								const x = i;
 								const y = j + oy;
@@ -3231,7 +3227,6 @@ intervals.continuous(time => {
 						}
 						else if (brushType == 5) { // Columm
 							let disp = ox-oxl;
-							makeLine(oxl + ~~(disp/2), 0, oxl + ~~(disp/2), HEIGHT, brush, Math.abs(~~disp));
 							for (let i = 0; i <= HEIGHT; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
 								const x = j + ox;
 								const y = i;

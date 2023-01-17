@@ -820,11 +820,17 @@ const solidUpdate = (x, y, g = GRAVITY, dxShiftChance = 0, tryMove = Element.try
 	const dy = 1 + Math.round(vel.y);
 	if (tryMove(x, y, x + dx, y + dy, SOLID_PASS_THROUGH));
 	else {
-		//Math.round(dy * Math.tan(theta * 0.5))
 		const d = Random.bool() ? -1 : 1;
 		if (tryMove(x, y, x - d, y + dy, SOLID_PASS_THROUGH));
 		else if (tryMove(x, y, x + d, y + dy, SOLID_PASS_THROUGH));
-		else vel.y = 0;
+		else{
+			if (vel.y > 4) {
+				vel.rotate(Random.angle()).div(5);
+				Element.setCellId(x, y, TYPES.PARTICLE);
+				return;
+			}
+			vel.y = 0;
+		}
 	}
 };
 
@@ -852,7 +858,8 @@ function makeLine(x, y, x1, y1, id, r = 10, chance = 0.2, passthrough = undefine
 	for (let i = minX; i <= maxX; i++) for (let j = minY; j <= maxY; j++) {
 		const p = new Vector2(i, j);
 		if (Element.inBounds(i, j) && line.distanceTo(p) < r) {
-			Element.setCell(i, j, id);
+			if(id === "explode") explode(i, j, 1)
+			else Element.setCell(i, j, id);
 		}
 	}
 }
@@ -3158,16 +3165,8 @@ intervals.continuous(time => {
 						continue;
 					}
 
-
 					const { x: ox, y: oy } = Vector2.floor(world.over(CELL));
-
-					// if(touches.allPressed.length == 1){
-					// 	try{let touch2 = touch1}
-					// 	catch{let touch2 = [ox, oy]}
-					// 	let touch1 = [ox, oy];
-					// 	//alert(touch1)
-					// 	if(Math.hypot(touch2[0] - touch1[0], touch2[1] - touch1[1]) > 20) alert(1)
-					// }
+					const { x: oxl, y: oyl } = Vector2.floor(mouse.worldLast.over(CELL));
 
 					if (brush === TYPES.PARTICLE)
 						explode(ox, oy, r);
@@ -3183,6 +3182,7 @@ intervals.continuous(time => {
 							}
 						};
 						if (brushType == 0) { // Circle
+							makeLine(ox, oy, oxl, oyl, brush, r);
 							for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 								if (i * i + j * j < r * r) {
 									const x = i + ox;
@@ -3200,6 +3200,7 @@ intervals.continuous(time => {
 							}
 						}
 						else if (brushType == 2) { // Ring
+							makeLine(ox, oy, oxl, oyl, brush, r);
 							for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 								if (i * i + j * j < r * r && i * i + j * j >= (r - 1) * (r - 1)) {
 									const x = i + ox;
@@ -3209,6 +3210,8 @@ intervals.continuous(time => {
 							}
 						}
 						else if (brushType == 3) { // Forceful
+							makeLine(ox, oy, oxl, oyl, brush, r);
+							makeLine(ox, oy, oxl, oyl, "explode", r);
 							for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 								if (i * i + j * j < r * r) {
 									const x = i + ox;
@@ -3219,13 +3222,17 @@ intervals.continuous(time => {
 							}
 						}
 						else if (brushType == 4) { // Row
+							let disp = oy-oyl;
+							makeLine(0, oyl + ~~(disp/2), WIDTH, oyl + ~~(disp/2), brush, Math.abs(~~disp));
 							for (let i = 0; i <= WIDTH; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
 								const x = i;
 								const y = j + oy;
 								handleCell(x, y);
 							}
 						}
-						else if (brushType == 5) { // Column
+						else if (brushType == 5) { // Columm
+							let disp = ox-oxl;
+							makeLine(oxl + ~~(disp/2), 0, oxl + ~~(disp/2), HEIGHT, brush, Math.abs(~~disp));
 							for (let i = 0; i <= HEIGHT; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
 								const x = j + ox;
 								const y = i;

@@ -3223,7 +3223,7 @@ intervals.continuous(time => {
 						}
 						else if (brushType == 4) { // Row
 							let disp = oy-oyl;
-							makeLine(0, oyl + ~~(disp/2), WIDTH, oyl + ~~(disp/2), brush, Math.abs(~~disp));
+							makeLine(0, oyl + ~~(disp/2), WIDTH, oyl + ~~(disp/2), brush, Math.abs((~~(disp / 2)) + 1));
 							for (let i = 0; i <= WIDTH; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
 								const x = i;
 								const y = j + oy;
@@ -3232,7 +3232,7 @@ intervals.continuous(time => {
 						}
 						else if (brushType == 5) { // Columm
 							let disp = ox-oxl;
-							makeLine(oxl + ~~(disp/2), 0, oxl + ~~(disp/2), HEIGHT, brush, Math.abs(~~disp));
+							makeLine(oxl + ~~(disp/2), 0, oxl + ~~(disp/2), HEIGHT, brush, Math.abs((~~(disp / 2)) + 1));
 							for (let i = 0; i <= HEIGHT; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
 								const x = j + ox;
 								const y = i;

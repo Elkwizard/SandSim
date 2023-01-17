@@ -3200,7 +3200,6 @@ intervals.continuous(time => {
 							}
 						}
 						else if (brushType == 2) { // Ring
-							makeLine(ox, oy, oxl, oyl, brush, r);
 							for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 								if (i * i + j * j < r * r && i * i + j * j >= (r - 1) * (r - 1)) {
 									const x = i + ox;

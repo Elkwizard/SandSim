@@ -2989,7 +2989,7 @@ const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
 			for (int j = -S; j <= S; j += T) {
 				vec2 off = vec2(i, j);
 				vec4 px = getPixel((position + off) / resolution);
-				glow += vec4(px.rgb * px.a, px.a) / (1.0 + dot(off, off));
+				glow += vec4(px.rgb * px.a, (px.r + px.g + px.b) / 3.0 * px.a) / (1.0 + dot(off, off));
 			}
 			
 			albedo *= (ambientLighting + directional);
@@ -2999,7 +2999,9 @@ const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
 			// hdr = 1.0 / (1.0 + exp(-5.0 * (hdr - 0.5)));
 			// hdr = ACESFilm(hdr);
 
-			return vec4(hdr, 1.0);
+			if (albedo.a > 0.0) return vec4(hdr, 1.0);
+			else if (glow.a > 0.0) return vec4(hdr / glow.a, glow.a);
+			return vec4(0.0);
 		}
 	`);
 
@@ -3342,6 +3344,7 @@ intervals.continuous(time => {
 				identity: !RTX,
 				ids: idTex
 			});
+			renderer.fill(Color.BLACK);
 			renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
 			
 			// brush previews

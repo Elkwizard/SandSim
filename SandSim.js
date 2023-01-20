@@ -2829,6 +2829,7 @@ const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
 		uniform bool clouds;
 		uniform float time;
 		uniform bool identity;
+		uniform float transparency;
 
 		uniform sampler2D image;
 		uniform sampler2D ids;
@@ -2999,7 +3000,7 @@ const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
 			// hdr = 1.0 / (1.0 + exp(-5.0 * (hdr - 0.5)));
 			// hdr = ACESFilm(hdr);
 
-			if (albedo.a > 0.0) return vec4(hdr, 1.0);
+			if (albedo != vec4(0.0)) return vec4(hdr, ceil(albedo.a) * (1.0 - transparency) + transparency);
 			else if (glow.a > 0.0) return vec4(hdr / glow.a, glow.a);
 			return vec4(0.0);
 		}
@@ -3016,6 +3017,7 @@ const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
 		solidUntil = 0,
 		clouds = false,
 		identity = false,
+		transparency = 1.0,
 		ids
 	}) {
 		godRays.setArguments({
@@ -3031,6 +3033,7 @@ const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
 			localAttenuation: 0.03,
 			solidLightCutoff: solidUntil / DISTANCE_SCALE,
 			identity,
+			transparency,
 			ids
 		});
 
@@ -3069,6 +3072,9 @@ let debugColorInterval = 7;
 let debugOscillating = false;
 
 let lightSources = [];
+
+const backgroundTex = new Texture(WIDTH, HEIGHT);
+backgroundTex.shader((x, y, dest) => dest.set(DATA[TYPES.TILE_BASE].getColor(x, y).times(0.3).opaque));
 
 intervals.continuous(time => {
 	try {
@@ -3342,9 +3348,11 @@ intervals.continuous(time => {
 				color: new Color(105, 105, 50),
 				ambient: new Color(200, 200, 200),
 				identity: !RTX,
-				ids: idTex
+				ids: idTex,
+				transparency: 0.8
 			});
-			renderer.fill(Color.BLACK);
+			// renderer.fill(Color.BLACK);
+			renderer.image(backgroundTex).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
 			renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
 			
 			// brush previews

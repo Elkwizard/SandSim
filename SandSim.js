@@ -2857,8 +2857,9 @@ const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
 			int id = getId(p);
 			if (${DISTORTED.map(id => `id == ${id}`).join(" || ")}) {
 				float noise = perlin(p * 0.1) * 0.3;
-				p.x += 2.0 * sin(time * 0.03 + p.y * 0.1 + noise);
-				p.y += 2.0 * perlin(p + time * 0.01 + p.x * 0.05 + noise);
+				const float speed = 1.0;
+				p.x += 2.0 * sin(time * 0.03 * speed + p.y * 0.1 + noise);
+				p.y += 2.0 * perlin(p + time * 0.01 * speed + p.x * 0.05 + noise);
 			}
 
 			if (id != getId(p)) p = prevP;

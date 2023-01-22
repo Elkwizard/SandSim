@@ -630,6 +630,7 @@ class Element {
 	}
 
 	static tryMove(x, y, fx, fy, passthrough, move = Element.move) {
+		return Element.tryMoveReference(x, y, fx, fy, passthrough, move);
 		const dx = fx - x;
 		const dy = fy - y;
 		const len = Math.sqrt(dx * dx + dy * dy);
@@ -693,6 +694,10 @@ const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, ...GAS]);
 const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL, TYPES.ESTIUM]);
 const SALT_WATER_SWAP_PASSTHROUGH = new Set([TYPES.WATER]);
 const SOLID_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, ...LIQUID]);
+const SOLID = new Set(Object.values(TYPES));
+SOLID.delete(TYPES.PARTICLE);
+for (const type of SOLID_PASS_THROUGH)
+	SOLID.delete(type);
 const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASS_THROUGH, TYPES.PARTICLE]);
 const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
@@ -3156,7 +3161,6 @@ intervals.continuous(time => {
 			if (keyboard.justPressed(" ")) paused = !paused;
 			if (keyboard.justPressed("s")) SELECTORS_SHOWN = !SELECTORS_SHOWN;
 
-
 			if (keyboard.pressed("Control")) {
 				if (mouse.pressed("Left"))
 					scene.camera.position.add(mouse.worldLast.minus(mouse.world));
@@ -3173,7 +3177,7 @@ intervals.continuous(time => {
 					const r = brushSize;
 					const { world } = touches.get(touch);
 
-					const hovered = scene.main.sceneObjectArray.some(el => !el.hidden && el.collidePoint(world));
+					const hovered = scene.main.getElementWithScript(TYPE_SELECTOR).some(el => !el.hidden && el.collidePoint(world));
 
 					if (hovered) {
 						anyHovered = true;

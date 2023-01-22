@@ -31,7 +31,7 @@ const TYPES = Object.fromEntries([
 	"SOIL", "DAMP_SOIL", "ROOT", "GRASS", "FLOWER",
 	"HIGH_EXPLOSIVE", "EXPLOSIVE", "EXPLOSIVE_DUST",
 	"STONE", "CONDENSED_STONE", "MARBLE",
-	"CLAY", "BRICK", 
+	"CLAY", "BRICK",
 	"TILE_BASE", "DECUMAN_TILE",
 	"GLAZE_BASE", "DECUMAN_GLAZE",
 	"PRIDIUM", "GENDERFLUID",
@@ -88,10 +88,13 @@ class Cell {
 }
 
 class WorldSave {
+	static MAGIC_SAVE_CONSTANT = 0xcc910831; // indicates elements are stored absolutely
 	constructor(grid) {
 		this.grid = grid;
 	}
 	toByteBuffer(buffer = new ByteBuffer()) {
+		buffer.write.uint32(WorldSave.MAGIC_SAVE_CONSTANT);
+		buffer.write.object(TYPES);
 		buffer.write.uint32(this.grid.length);
 		buffer.write.uint32(this.grid[0].length);
 
@@ -127,8 +130,19 @@ class WorldSave {
 		return buffer;
 	}
 	static fromByteBuffer(buffer) {
-		const width = buffer.read.uint32();
+		let initial = buffer.read.uint32();
+		let width = initial;
+		let encodedTypes = TYPES;
+		if (initial === WorldSave.MAGIC_SAVE_CONSTANT) {
+			encodedTypes = buffer.read.object();
+			width = buffer.read.uint32();
+		}
 		const height = buffer.read.uint32();
+
+		const idMap = [];
+		for (const element in encodedTypes)
+			idMap[encodedTypes[element]] = TYPES[element];
+
 		const save = new WorldSave(
 			Array.dim(width, height)
 				.map(() => new Cell(TYPES.AIR))
@@ -146,7 +160,7 @@ class WorldSave {
 				const acts = buffer.read.int32();
 				for (let i = 0; i < duration; i++) {
 					const cell = save.grid[x][y];
-					cell.id = id;
+					cell.id = idMap[id];
 					cell.reference = reference;
 					cell.acts = acts;
 
@@ -208,10 +222,6 @@ const lastIds = Array.dim(WIDTH, HEIGHT)
 
 const NUM_TYPES = Object.entries(TYPES).length;
 
-let pos = true;
-
-let number = 0;
-
 class Element {
 	static DEFAULT_PASS_THROUGH = new Set([TYPES.AIR]);
 	constructor(alpha, color, resistance = 0, flammability = 0, update = () => null, onburn = () => null, reference = false) {
@@ -237,7 +247,6 @@ class Element {
 
 		this.textureCache = !(this.reference || this.color);
 		if (this.textureCache) {
-			number++;
 			this.tex = new Texture(WIDTH, HEIGHT);
 			this.colorCached = Array.dim(WIDTH, HEIGHT);
 		}
@@ -679,7 +688,7 @@ const DISPERSION = 4;
 
 const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT]);
 const LIQUID = new Set([TYPES.WATER, TYPES.BLOOD, TYPES.ESTIUM, TYPES.DECUMAN_GLAZE, TYPES.GLAZE_BASE, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
-const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE, TYPES.PARTICLE]);
+const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE]);
 const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, ...GAS]);
 const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL, TYPES.ESTIUM]);
 const SALT_WATER_SWAP_PASSTHROUGH = new Set([TYPES.WATER]);
@@ -868,9 +877,6 @@ const EXPLOSION_PASSTHROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.LIGHTNING, 
 EXPLOSION_PASSTHROUGH.delete(TYPES.BLUE_FIRE);
 EXPLOSION_PASSTHROUGH.delete(TYPES.FIRE);
 
-let explosiveSX = Random.int(-5, 5);
-let explosiveSY = Random.int(-5, 5);
-
 function explodeLine(x, y, x1, y1, vel, passthrough) {
 	const dx = x1 - x;
 	const dy = y1 - y;
@@ -887,7 +893,7 @@ function explodeLine(x, y, x1, y1, vel, passthrough) {
 			const cell = grid[ox][oy];
 			const base = cell.id === TYPES.PARTICLE ? cell.reference : cell.id;
 
-			if (Random.bool(DATA[base].getResistance(ox, oy)))
+			if (Random.bool(DATA[cell.id].getResistance(ox, oy)))
 				break;
 
 			cell.id = TYPES.PARTICLE;
@@ -3165,9 +3171,9 @@ intervals.continuous(time => {
 
 				for (const touch of touches.allPressed) {
 					const r = brushSize;
-					const { screen, world } = touches.get(touch);
+					const { world } = touches.get(touch);
 
-					const hovered = scene.main.sceneObjectArray.some(el => !el.hidden && el.collidePoint(screen));
+					const hovered = scene.main.sceneObjectArray.some(el => !el.hidden && el.collidePoint(world));
 
 					if (hovered) {
 						anyHovered = true;

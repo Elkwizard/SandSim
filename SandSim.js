@@ -298,8 +298,19 @@ class DYNAMIC_OBJECT extends ElementScript {
 			}
 		}
 	}
+	removeIfNecessary(obj) {
+		if ((obj.defaultShape && !obj.getBoundingBox().intersect(new Rect(0, 0, width, height))) || isNaN(obj.transform.position)) {
+			obj.remove();
+			return true;
+		}
+		return false;
+	}
 	inject(obj) {
-		const { x: cx, y: cy } = obj.transform.position.over(CELL);
+		if ((obj.defaultShape && !obj.getBoundingBox().intersect(new Rect(0, 0, width, height))) || isNaN(obj.transform.position)) {
+			obj.remove();
+			return;
+		}
+		
 		this.forEachCell((cell, x, y) => {
 			const c = grid[x][y];
 			if (c.id !== TYPES.AIR && !STATIC_SOLID.has(c.id))
@@ -437,8 +448,6 @@ class DYNAMIC_OBJECT extends ElementScript {
 	update(obj) {
 		const { rb } = this;
 		rb.mobile = !paused;
-		if (!obj.getBoundingBox().intersect(new Rect(0, 0, width, height)) || isNaN(obj.transform.position))
-			obj.remove();
 	}
 	draw(obj, name, shape) {
 		if (keyboard.pressed("c")) {

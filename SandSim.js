@@ -442,7 +442,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 			return;
 		}
 
-		const inflateDist = Math.SQRT2 * CELL;
+		const inflateDist = CELL * 0.5;//Math.SQRT2 * CELL;
 
 		if (shapes.length === 1 && intervals.frameCount % DYNAMIC_OBJECT.DISTRIBUTION !== this.slot) {
 			const newCenterOfMass = DYNAMIC_OBJECT.computeCenterOfMass(this.grid);
@@ -519,7 +519,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 class CHUNK_COLLIDER extends ElementScript {
 	static RES = 3;
 	static MIN_FILL_PERCENT = 0.05;
-	static MIN_SHAPE_AREA_PERCENT = 0.1;
+	static MIN_SHAPE_AREA_PERCENT = 0.03;
 	static DISTRIBUTION = 3;
 	static nextSlot = 0;
 	static isSolid(cell) {

@@ -16,10 +16,12 @@ const controls = {
 	"Shift + u": "Upload world from file",
 	"r": "Reset world",
 	"e": "Restore zoom",
-	"Shift + =": "Zoom in",
-	"Shift + -": "Zoom out",
-	"Shift + Arrow Keys": "Move camera",
-	"g": "Toggle 'RTX'"
+	"Shift + = & Mouse Wheel Up": "Zoom in",
+	"Shift + - & Mouse Wheel Down": "Zoom out",
+	"Shift + Arrow Keys & Control + Drag": "Move camera",
+	"Control + Click & Drag": "Move camera",
+	"g": "Toggle 'RTX'",
+	"a": "Animate Wall"
 };
 
 canvas.clearScreen = () => renderer.fill(Color.BLACK);
@@ -535,19 +537,19 @@ class CHUNK_COLLIDER extends ElementScript {
 	const rightWall = scene.main.addPhysicsRectElement("rightWall", width + 50, height / 2, 100, height, false, new Controls("w", "s", "a", "d"), "No Tag");
 };
 
-intervals.continuous(time => {
-	if (keyboard.pressed("Control") && mouse.justPressed("Left") && STATIC_SOLID.has(brush)) {
-		const obj = scene.main.addPhysicsElement("obj", 0, 0, true, new Controls("w", "s", "a", "d"), "No Tag");
-		const radius = Math.ceil(Random.range(10, 20));
-		const grid = Array.dim(radius * 2 + 1, radius * 2 + 1);
-		for (let i = -radius; i <= radius; i++) {
-			for (let j = -radius; j <= radius; j++) {
-				grid[i + radius][j + radius] = new Cell(i ** 2 + j ** 2 < radius ** 2 ? brush : TYPES.AIR);
-			}
-		}
-		obj.scripts.add(DYNAMIC_OBJECT, grid, Vector2.floor(mouse.world.over(CELL)).minus(radius));
-	}
-}, IntervalFunction.AFTER_UPDATE);
+// intervals.continuous(time => {
+// 	if (keyboard.pressed("Control") && mouse.justPressed("Left") && STATIC_SOLID.has(brush)) {
+// 		const obj = scene.main.addPhysicsElement("obj", 0, 0, true, new Controls("w", "s", "a", "d"), "No Tag");
+// 		const radius = Math.ceil(Random.range(10, 20));
+// 		const grid = Array.dim(radius * 2 + 1, radius * 2 + 1);
+// 		for (let i = -radius; i <= radius; i++) {
+// 			for (let j = -radius; j <= radius; j++) {
+// 				grid[i + radius][j + radius] = new Cell(i ** 2 + j ** 2 < radius ** 2 ? brush : TYPES.AIR);
+// 			}
+// 		}
+// 		obj.scripts.add(DYNAMIC_OBJECT, grid, Vector2.floor(mouse.world.over(CELL)).minus(radius));
+// 	}
+// }, IntervalFunction.AFTER_UPDATE);
 
 class Chunk {
 	constructor(x, y) {
@@ -3203,6 +3205,9 @@ class SETTINGS extends ElementScript {
 	init(obj, type) {
 		obj.scripts.removeDefault();
 		this.type = type;
+		this.totalControls = Object.entries(controls).length;
+		this.rowHeight = obj.height / this.totalControls;
+		this.font = new Font(this.rowHeight * 0.7, "Arial");
 	}
 	click(obj) {
 	}
@@ -3210,12 +3215,22 @@ class SETTINGS extends ElementScript {
 		obj.hidden = !SETTINGS_SHOWN;
 	}
 	draw(obj, name, shape) {
-		renderer.draw(Color.WHITE).rect(width * .125, height * .125, width * .75, height * .75);
+		renderer.draw(Color.WHITE).rect(shape);
+		const borderColor = Color.GRAY;
+		const entries = Object.entries(controls);
+		for (let i = 0; i < this.totalControls; i++) {
+			const y = shape.y + i * this.rowHeight;
+			renderer.stroke(borderColor).rect(-shape.width / 2, y, shape.width, this.rowHeight);
+			renderer.textMode = TextMode.CENTER_CENTER;
+			renderer.draw(Color.BLACK).text(this.font, entries[i][0], -shape.width / 4, y + this.rowHeight / 2);
+			renderer.textMode = TextMode.CENTER_CENTER;
+			renderer.draw(Color.BLACK).text(this.font, entries[i][1], shape.width / 4, y + this.rowHeight / 2);
+		}
+		renderer.stroke(borderColor).line(0, -shape.height / 2, 0, shape.height / 2);
+
 	}
-	static create(type) {
-		const panel = scene.main.addUIElement("panel", 0, 0, 0, 0);
-		//const exit = scene.main.addUIElement("button", x + this.SIZE / 2, y + this.SIZE / 2, this.SIZE, this.SIZE);
-		//exit.scripts.add(SETTINGS)
+	static create() {
+		const panel = scene.main.addUIElement("panel", width / 2, height / 2, width * 0.75, height * 0.75);
 		panel.scripts.add(SETTINGS);
 		return panel;
 	}

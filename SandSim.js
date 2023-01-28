@@ -65,12 +65,13 @@ const TYPES = Object.fromEntries([
 const ELEMENT_COUNT = Object.keys(TYPES).length;
 
 class WorldSave {
-	static MAGIC_SAVE_CONSTANT = 0xcc910831; // indicates elements are stored absolutely
+	static MAGIC_SAVE_CONSTANT_ELEMENT = 0xcc910831; // indicates elements are stored absolutely
+	static MAGIC_SAVE_CONSTANT_RIGIDBODY = 0xfebc1828;
 	constructor(grid) {
 		this.grid = grid;
 	}
 	toByteBuffer(buffer = new ByteBuffer()) {
-		buffer.write.uint32(WorldSave.MAGIC_SAVE_CONSTANT);
+		buffer.write.uint32(WorldSave.MAGIC_SAVE_CONSTANT_RIGIDBODY);
 		buffer.write.object(TYPES);
 		buffer.write.uint32(this.grid.length);
 		buffer.write.uint32(this.grid[0].length);
@@ -104,13 +105,38 @@ class WorldSave {
 
 		writeBlock();
 
+		const dyn = scene.main.getElementsWithScript(DYNAMIC_OBJECT);
+
+		buffer.write.uint32(dyn.length);
+	
+		for (let i = 0; i < dyn.length; i++) {
+			const obj = dyn[i];
+			buffer.write.float64(obj.transform.rotation);
+			const l = obj.scripts.DYNAMIC_OBJECT;
+			const upperLeft = Vector2.floor(obj.transform.localSpaceToGlobalSpace(l.centerOfMass.inverse).over(CELL));
+			upperLeft.toByteBuffer(buffer);
+			buffer.write.uint32(l.width);
+			buffer.write.uint32(l.height);
+			for (let i = 0; i < l.width; i++) for (let j = 0; j < l.height; j++) {
+				const cell = l.grid[i][j];
+				buffer.write.uint8(cell.id);
+				if (cell.id) {
+					buffer.write.uint8(cell.reference);
+					buffer.write.uint32(cell.acts);
+				}
+			}
+		}
+
 		return buffer;
 	}
 	static fromByteBuffer(buffer) {
 		let initial = buffer.read.uint32();
 		let width = initial;
 		let encodedTypes = TYPES;
-		if (initial === WorldSave.MAGIC_SAVE_CONSTANT) {
+		if (
+			initial === WorldSave.MAGIC_SAVE_CONSTANT_ELEMENT ||
+			initial === WorldSave.MAGIC_SAVE_CONSTANT_RIGIDBODY
+		) {
 			encodedTypes = buffer.read.object();
 			width = buffer.read.uint32();
 		}
@@ -158,6 +184,27 @@ class WorldSave {
 				continue;
 			}
 
+		}
+
+		if (initial === WorldSave.MAGIC_SAVE_CONSTANT_RIGIDBODY) {
+			const rigidbodyCount = buffer.read.uint32();
+			for (let i = 0; i < rigidbodyCount; i++) {
+				const obj = scene.main.addPhysicsElement("obj", 0, 0, true);
+				obj.transform.rotation = buffer.read.float64();
+				const upperLeft = Vector2.fromByteBuffer(buffer);
+				const grid = Array.dim(buffer.read.uint32(), buffer.read.uint32())
+					.map(() => new Cell(TYPES.AIR));
+				for (let i = 0; i < grid.length; i++) for (let j = 0; j < grid[0].length; j++) {
+					const cell = grid[i][j];
+					cell.id = buffer.read.uint8();
+					if (cell.id) {
+						cell.reference = buffer.read.uint8();
+						cell.acts = buffer.read.uint32();
+					}
+				}
+
+				obj.scripts.add(DYNAMIC_OBJECT, grid, upperLeft, Vector2.origin);
+			}
 		}
 
 		return save;
@@ -3918,8 +3965,9 @@ function handleInput() {
 						for (let j = minChunk.y; j <= maxChunk.y; j++) {
 							chunks[i][j].sceneObject.scripts.CHUNK_COLLIDER.remesh();
 						}
-						const obj = scene.main.addPhysicsElement("obj", 0, 0, true);
+						const obj = scene.main.addPhysicsElement("obj", 0, 0, true, new Controls("i", "k", "j", "l"));
 						obj.scripts.add(DYNAMIC_OBJECT, objGrid, new Vector2(x, y));
+						if (keyboard.pressed("l")) obj.scripts.add(PLAYER_MOVEMENT);
 					}
 				} else if (key == "0") brushType = 0;
 				else if (key == "1") brushType = 1;

@@ -27,6 +27,7 @@ canvas.clearScreen = () => renderer.fill(Color.BLACK);
 const TYPES = Object.fromEntries([
 	"AIR",
 	"TEST",
+	"THICKET_SEED", "THICKET", "THICKET_BUD", "THICKET_STEM", "INCENSE_SMOKE", "INCENSE",
 	"SUNFLOWER_PETAL", "SUNFLOWER_STEM", "SUNFLOWER_SEED",
 	"SOIL", "DAMP_SOIL", "ROOT", "GRASS", "FLOWER",
 	"HIGH_EXPLOSIVE", "EXPLOSIVE", "EXPLOSIVE_DUST",
@@ -1069,6 +1070,7 @@ const RADIATION_RESISTANT = new Set([TYPES.AIR, TYPES.RADIUM, TYPES.ACTINIUM, TY
 const NEURON = new Set([TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON])
 const BRAIN = new Set([...NEURON, TYPES.CEREBRUM])
 const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD, TYPES.BONE])
+const THICKETS = new Set([TYPES.THICKET, TYPES.INCENSE, TYPES.THICKET_BUD, TYPES.THICKET_SEED, TYPES.INCENSE_SMOKE, TYPES.THICKET_STEM]);
 
 function updatePixel(x, y) {
 	tex.setPixel(x, y, DATA[grid[x][y].id].getColor(x, y));
@@ -1353,6 +1355,22 @@ function makeLine(x, y, x1, y1, id, r = 10, chance = 0.2, passthrough = undefine
 		}
 	}
 }
+
+function weedBranch(x1, y1, x2, y2, id){
+	let N = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1))
+	let ox;
+	let oy;
+	for (let step = 0; step <= N; step++) {
+		let t = N === 0 ? 0.0 : step / N;
+		ox = Math.round(x1 * (1.0 - t) + t * x2);
+		oy = Math.round(y1 * (1.0 - t) + t * y2);
+		if(Element.isEmpty(ox, oy)){
+			Element.setCell(ox, oy, id)
+			grid[ox][oy].acts = -1;
+		}
+	}
+}
+
 
 const EXPLOSION_PASSTHROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.LIGHTNING, TYPES.AIR]);
 EXPLOSION_PASSTHROUGH.delete(TYPES.BLUE_FIRE);
@@ -1907,21 +1925,6 @@ const DATA = {
 		["#ab836f", 1]
 	]), 0.2, 0, solidUpdate),
 
-	[TYPES.SUNFLOWER_SEED]: new Element(1, freqColoring([
-		["#4d483f", 9],
-		["#383632", 8],
-		["#6b6452", 5],
-		["#a39c8c", 2]
-	]), 0.04, 0.06, (x, y) => {
-		solidUpdate(x, y);
-		if (Element.isType(x, y + 1, TYPES.DAMP_SOIL) && grid[x][y + 1].acts == 0) {
-			Element.die(x, y);
-			grid[x][y + 1].acts = 5;
-		}
-	}, (x, y) => {
-		Element.trySetCell(x, y - 1, Random.bool(.4) ? TYPES.ASH : TYPES.SMOKE);
-	}),
-
 	[TYPES.SALT]: new Element(1, freqColoring([
 		["#ded7d5", 45],
 		["#e3a594", 45],
@@ -2363,7 +2366,7 @@ const DATA = {
 		if (Random.bool(.03)) {
 			Element.setCell(x, y, TYPES.WATER);
 			return true;
-		}
+		}SH
 	}),
 
 	[TYPES.SOIL]: new Element(1, freqColoring([
@@ -2393,6 +2396,137 @@ const DATA = {
 		}
 	}, (x, y) => {
 		Element.trySetCell(x, y - 1, Random.bool(.7) ? (Random.bool(.2) ? TYPES.ASH : TYPES.SMOKE) : TYPES.STEAM);
+	}),
+
+	[TYPES.THICKET_SEED]: new Element(1, freqColoring([
+		["#423322", 9],
+		["#291f14", 8],
+		["#362a1d", 4],
+		["#69543e", 4],
+		["#594936", 3],
+	]), 0.04, 0.06, (x, y) => {
+		solidUpdate(x, y);
+
+		if (Element.isType(x, y + 1, TYPES.DAMP_SOIL) && grid[x][y + 1].acts == 0) {
+			Element.setCell(x, y, TYPES.THICKET_STEM);
+			let h = Random.int(38, 50);
+			grid[x][y].acts = h;
+		}
+	}, (x, y) => {
+		Element.trySetCell(x, y - 1, Random.bool(.4) ? TYPES.ASH : TYPES.SMOKE);
+	}),
+
+	[TYPES.THICKET_STEM]: new Element(1, freqColoring([
+		["#614a57", 3],
+		["#4d593d", 7],
+		["#4a523a", 10],
+		["#434d36", 7],
+
+	]), .15, .03, (x, y) => {
+		Element.trySetCell(x, y + 1, TYPES.ROOT, SOIL_TYPES);
+
+		if (grid[x][y].acts > 1 && (Element.isType(x, y - 1, TYPES.AIR) || Element.isType(x, y - 1, TYPES.THICKET) || (Element.isType(x, y - 1, TYPES.THICKET_STEM) && grid[x][y-1].acts == -1))) {
+			if (Random.bool(.07)) {
+				Element.setCell(x, y - 1, TYPES.THICKET_STEM);
+				grid[x][y - 1].acts = grid[x][y].acts - 1;
+			} else Element.updateCell(x, y)
+		}
+
+		if(Random.bool(.0008) && grid[x][y].acts > 1){
+			let h = grid[x][y].acts;
+			grid[x][y].acts = -1;
+			grid[x][y+1].acts = -1;
+			let d = Random.bool() ? -1 : 1;
+			let a = Random.range(-Math.PI/5, Math.PI/5)
+			let ox = Math.ceil(Math.cos(a)*d*(h/3) + Random.range(-4, 10)) + x;
+			let oy = Math.ceil(Math.sin(a)*(h/3) + Random.range(-3, 3)) + y;
+			weedBranch(x + d, y, ox, oy, TYPES.THICKET_STEM);
+			for(let i = -3*Math.PI/4; i < 3*Math.PI/4; i += Math.PI/4){
+				let len = 6 / Math.sqrt(Math.abs(i)+1)
+				let oox = Math.ceil(Math.cos(a+i)*d*len) + ox;
+				let ooy = Math.ceil(Math.sin(a+i)*len) + oy;
+				weedBranch(ox, oy, oox, ooy, TYPES.THICKET)
+			}	
+		}
+
+		if(grid[x][y].acts == 1){
+			weedBranch(x, y - 1, x, y - 6, TYPES.THICKET_BUD);
+			weedBranch(x + (Random.bool() ? 1 : -1), y - 1, x + (Random.bool() ? 1 : -1), y - 5, TYPES.THICKET_BUD);
+			weedBranch(x + (Random.bool() ? 1 : -1), y - 1, x + (Random.bool() ? 1 : -1), y - 5, TYPES.THICKET_BUD);
+			let ox = Math.ceil(Math.cos(3*Math.PI/2 + Math.PI/5)*5) + x;
+			let oy = Math.ceil(Math.sin(3*Math.PI/2 + Math.PI/5)*5) + y;
+			weedBranch(x, y, ox, oy, TYPES.THICKET)
+			ox = Math.ceil(Math.cos(3*Math.PI/2 - Math.PI/5)*5) + x;
+			oy = Math.ceil(Math.sin(3*Math.PI/2 - Math.PI/5)*5) + y;
+			weedBranch(x-1, y, ox, oy, TYPES.THICKET)
+			grid[x][y].acts--;
+		}
+		
+	}, (x, y) => {
+		Element.trySetCell(x, y - 1, Random.bool(.4) ? (Random.bool(.2) ? TYPES.ASH : TYPES.SMOKE) : TYPES.STEAM);
+	}),
+
+	[TYPES.THICKET_BUD]: new Element(1, freqColoring([
+		["#804e77", 2], 
+		["#753f6c", 4], 
+		["#7a4d73", 4], 
+		["#6b3e64", 2], 
+		["#7d5c78", 1]
+	]), .15, .03, (x,y) => {
+		if(grid[x][y].acts == 0) Element.consumeReact(x, y, TYPES.AIR, TYPES.INCENSE, .01);
+	}, (x, y) => {
+		Element.trySetCell(x, y - 1, Random.bool(.4) ? (Random.bool(.2) ? TYPES.ASH : TYPES.INCENSE_SMOKE) : TYPES.STEAM);
+	}),
+
+	[TYPES.THICKET]: new Element(1, freqColoring([
+		["#427a35", 2],
+		["#3f7a31", 1],
+		["#4a7536", 2],
+		["#4a8a3b", 3],
+		["#539644", 1]
+	]), .15, .03, (x, y)=> null, (x, y) => {
+		Element.trySetCell(x, y - 1, Random.bool(.4) ? (Random.bool(.2) ? TYPES.ASH : TYPES.SMOKE) : TYPES.STEAM);
+	}),
+
+	[TYPES.INCENSE]: new Element(1, (x, y) => {
+		return Random.choice(freqColoring([
+			["#57593c01", 2],
+			["#5d614001", 3],
+			["#73754901", 1],
+
+			["#44613b01", 1],
+			["#37472901", 2],
+			["#354a2f01", 2],
+			["#364d2e01", 3],
+		]))
+	}, .15, .05, (x, y) => {
+		solidUpdate(x, y)
+	}, (x, y) => {
+		Element.trySetCell(x, y - 1, Random.bool(.1) ? TYPES.ASH : TYPES.INCENSE_SMOKE);
+	}),
+
+	[TYPES.INCENSE_SMOKE]: new Element(.6, (x, y) => {
+		let p = Random.perlin2D(x, y, .05);
+		if(p > .5 && p < .6) return new Color("#0d1e0e01");
+		else return new Color("#091c0b01");
+	}, 0, 0, (x, y) => {
+		gasUpdate(x, y)
+	}),
+
+
+	[TYPES.SUNFLOWER_SEED]: new Element(1, freqColoring([
+		["#4d483f", 9],
+		["#383632", 8],
+		["#6b6452", 5],
+		["#a39c8c", 2]
+	]), 0.04, 0.06, (x, y) => {
+		solidUpdate(x, y);
+		if (Element.isType(x, y + 1, TYPES.DAMP_SOIL) && grid[x][y + 1].acts == 0) {
+			Element.die(x, y);
+			grid[x][y + 1].acts = 5;
+		}
+	}, (x, y) => {
+		Element.trySetCell(x, y - 1, Random.bool(.4) ? TYPES.ASH : TYPES.SMOKE);
 	}),
 
 	[TYPES.SUNFLOWER_PETAL]: new Element(1, [new Color("#f5c440"), new Color("#e3c04f"), new Color("#ebd234")], .05, .03, (x, y) => null, (x, y) => {

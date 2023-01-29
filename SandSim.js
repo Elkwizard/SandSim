@@ -2415,7 +2415,7 @@ const DATA = {
 		if (Random.bool(.03)) {
 			Element.setCell(x, y, TYPES.WATER);
 			return true;
-		}SH
+		}
 	}),
 
 	[TYPES.SOIL]: new Element(1, freqColoring([

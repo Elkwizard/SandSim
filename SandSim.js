@@ -435,14 +435,15 @@ class DYNAMIC_OBJECT extends ElementScript {
 
 		const shapes = Geometry.gridToExactPolygons(this.smallGrid, 1)
 			.filter(shape => shape.area > 2 ** 2)
-			.map(shape => Geometry.simplify(shape, 0.5));
+			.map(shape => Geometry.simplify(shape, 0.5))
+			.sort((a, b) => a.area - b.area);
 		
 		if (!shapes.length) {
 			obj.remove();
 			return;
 		}
 
-		const inflateDist = CELL * 0.5;//Math.SQRT2 * CELL;
+		const inflateDist = CELL;//Math.SQRT2 * CELL;
 
 		if (shapes.length === 1 && intervals.frameCount % DYNAMIC_OBJECT.DISTRIBUTION !== this.slot) {
 			const newCenterOfMass = DYNAMIC_OBJECT.computeCenterOfMass(this.grid);
@@ -2727,7 +2728,7 @@ const DATA = {
 	}),
 	[TYPES.POWER_LAVA]: new Element(100, [Color.CYAN, Color.BLUE, Color.SKY_BLUE], 0.7, 0, (x, y) => {
 		liquidUpdate(x, y);
-		
+
 		Element.react(x, y - Math.floor((Math.random() * 6)), TYPES.AIR, TYPES.BLUE_FIRE, 0.007);
 		Element.reactMany(x, y, WATER_TYPES, TYPES.SMOKE, 0.005);
 

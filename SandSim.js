@@ -2726,8 +2726,8 @@ const DATA = {
 		return true;
 	}),
 	[TYPES.POWER_LAVA]: new Element(100, [Color.CYAN, Color.BLUE, Color.SKY_BLUE], 0.7, 0, (x, y) => {
-		fluidUpdate(x, y, 1, GRAVITY, SOLID_PASS_THROUGH);
-
+		liquidUpdate(x, y);
+		
 		Element.react(x, y - Math.floor((Math.random() * 6)), TYPES.AIR, TYPES.BLUE_FIRE, 0.007);
 		Element.reactMany(x, y, WATER_TYPES, TYPES.SMOKE, 0.005);
 

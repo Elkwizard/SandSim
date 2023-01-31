@@ -633,7 +633,7 @@ class CHUNK_COLLIDER extends ElementScript {
 	static RES = 3;
 	static MIN_FILL_PERCENT = 0.05;
 	static MIN_SHAPE_AREA_PERCENT = 0.03;
-	static DISTRIBUTION = 30;
+	static DISTRIBUTION = 4;
 	static nextSlot = 0;
 	static isSolid(cell) {
 		if (cell.id === TYPES.ELECTRICITY) return SOLID.has(cell.reference);

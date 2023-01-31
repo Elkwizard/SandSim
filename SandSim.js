@@ -2485,7 +2485,8 @@ const DATA = {
 		if(Random.bool(.0008) && grid[x][y].acts > 1){
 			let h = grid[x][y].acts;
 			grid[x][y].acts = -1;
-			grid[x][y+1].acts = -1;
+			if (Element.inBounds(x, y + 1))
+				grid[x][y+1].acts = -1;
 			let d = Random.bool() ? -1 : 1;
 			let a = Random.range(-Math.PI/5, Math.PI/5)
 			let ox = Math.ceil(Math.cos(a)*d*(h/3) + Random.range(-4, 10)) + x;

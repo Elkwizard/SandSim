@@ -3962,7 +3962,17 @@ let debugOscillating = false;
 let lightSources = [];
 
 const backgroundTex = new Texture(WIDTH, HEIGHT);
-backgroundTex.shader((x, y, dest) => dest.set(DATA[TYPES.TILE_BASE].getColor(x, y).times(0.3).opaque));
+backgroundTex.shader((x, y, dest) => {
+	const factor = 1.2;
+	const fx = Number.clamp(~~(x / factor), 0, WIDTH - 1);
+	const fy = Number.clamp(~~(y / factor), 0, HEIGHT - 1);
+	dest.set(
+		DATA[TYPES.TILE_BASE]
+			.getColor(fx, fy)
+			.times(0.2)
+			.opaque
+	);
+});
 
 function handleBrushInput() {
 	if (keyboard.pressed("Control")) return;

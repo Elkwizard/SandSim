@@ -278,7 +278,7 @@ const HEIGHT = grid[0].length;
 
 class DYNAMIC_OBJECT extends ElementScript {
 	static RES = 2;
-	static SKIP = 10;
+	static SKIP = 20;
 	static DISTRIBUTION = 8;
 	static nextSlot = 0;
 	init(obj, grid, upperLeft, textureOffset) {
@@ -484,9 +484,10 @@ class DYNAMIC_OBJECT extends ElementScript {
 		this.forEachCell((cell, x, y) => {
 			if (grid[x][y].sameType(cell)) {
 				Element.die(x, y);
-				tex.setPixel(x, y, this.colors.get(cell));
+				tex.shaderSetPixel(x, y, this.colors.get(cell));
 			} else cell.id = TYPES.AIR;
 		});
+		tex.loaded = false;
 
 		const { defaultShape } = obj;
 
@@ -977,6 +978,15 @@ class Element {
 		}
 	}
 
+	static probabilityAffectNeighbors(x, y, effect, range, samples) {
+		for (let i = 0; i < samples; i++) {
+			const ox = x + Random.int(-range, range);
+			const oy = y + Random.int(-range, range);
+			if (x !== ox && y !== oy && Element.inBounds(ox, oy) && grid[ox][oy].id !== TYPES.AIR)
+				effect(ox, oy);
+		}
+	}
+
 	static tryBurn(x, y, type) {
 		const cell = grid[x][y];
 		if (cell.id !== type) {
@@ -1415,13 +1425,90 @@ const fluidUpdate = (x, y, direction, accel, passthrough) => {
 	} else vel.y = 0;
 };
 
-function beeUpdate(x, y, passthrough) {
+function chaosUpdate(x, y, passthrough) {
 	const angle = Random.angle();
 	const cos = Math.cos(angle);
 	const sin = Math.sin(angle);
 	if (!Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin), passthrough))
 		Element.updateCell(x, y);
 }
+
+const boidUpdate = (x, y, maxSpeed = 4, accuracy = 1, passthrough) => { // by val (mostly)
+	const cell = grid[x][y];
+	const type = cell.id;
+	const cellPV = new Vector2(x,y); 
+
+	//variables
+	const separationRadius = 10;
+	const separation = 2;
+	const cohersion = 10; //over some value
+	const alignment = 2;
+	const jitterRange = 0.1;
+	const boundingRange = 25;
+	const boundingStrength = 0.003;
+	const samplingRange = 30;
+	const samplingAmount = 40 * accuracy;
+
+
+	//rules
+	let cohesionV = new Vector2(0, 0); //cohesion
+	let separationV = new Vector2(0, 0); //seperation
+	let alignmentV = new Vector2(0, 0);	//alignment
+	cell.vel.rotate(Random.range(-jitterRange, jitterRange));
+	cell.vel.mag += Random.range(-jitterRange, jitterRange);
+	let boundingV = new Vector2(0,0); //bounding
+	
+	//boundary code
+	// if (cellPV.x < boundingRange || cellPV.x > WIDTH-boundingRange || cellPV.y < boundingRange || cellPV.y > HEIGHT-boundingRange){
+	// 	// cell.vel.rotate(boundingStrength);
+	// 	cell.vel.add(new Vector2(WIDTH / 2, HEIGHT / 2).minus(cellPV).times(boundingStrength))
+	// }
+
+	let count = 0;
+	Element.probabilityAffectNeighbors(x, y, (ox, oy) => {
+		if(Element.isType(ox,oy,type)){
+			count++;
+			const otherBoidPV = new Vector2(ox,oy);
+			const otherBoidCell = grid[ox][oy];
+
+			//rule 1, going towards center of flock
+			cohesionV = cohesionV.add(otherBoidPV);
+
+			//rule 2, avoid collision with other boids
+			if (otherBoidPV.minus(cellPV).mag < separationRadius) {
+				separationV.add(cellPV.minus(otherBoidPV));
+			}
+
+			//rule 3, try to match velocity of surrounding boids
+			alignmentV = alignmentV.add(otherBoidCell.vel);
+		}
+	}, samplingRange, samplingAmount);
+	
+	if (count > 0) {
+		//position correction
+		cohesionV.div(count); 
+		cohesionV.sub(cellPV).normalize().div(cohersion); 
+
+		separationV.div(count);
+		separationV.div(separation);
+
+		//velocity correction
+		alignmentV.div(count);
+		alignmentV.sub(cell.vel).div(alignment)
+	}
+
+	//to add more rules add the vectors to the sum
+	cell.vel.add(Vector2.sum([cohesionV, separationV, alignmentV,boundingV]));
+	cell.vel.mag = Number.clamp(cell.vel.mag, 1, maxSpeed);
+	// cell.vel.mul(0.95);
+	const dx = Math.round(cell.vel.x); 
+	const dy = Math.round(cell.vel.y);
+	if (!Element.tryMove(x, y, x + dx, y + dy, passthrough)) {
+		cell.vel.invert();
+		Element.updateCell(x, y);
+	}
+}
+
 
 const fireUpdate = (x, y, type, up = true) => {
 	let neighbors = 0;
@@ -2980,7 +3067,11 @@ const DATA = {
 		if (Random.bool(.7)) Element.trySetCell(x, y - 1, Random.bool(.05) ? TYPES.ASH : TYPES.SMOKE);
 		Element.trySetCell(x, y - 1, Random.bool(.3) ? TYPES.MOLTEN_WAX : TYPES.HONEY);
 	}),
-	[TYPES.BEE]: new Element(2, [new Color("#e8d207"), new Color("#ffe812"), new Color("#f5e764"), new Color("#e6d42c"), new Color("#d1a81f"), new Color("#bd940d")], 0.1, 0.05, (x, y) => beeUpdate(x, y, LIQUID_PASS_THROUGH), (x, y) => {
+	[TYPES.BEE]: new Element(2, [
+		new Color("#e8d207"), new Color("#ffe812"),
+		new Color("#f5e764"), new Color("#e6d42c"),
+		new Color("#d1a81f"), new Color("#bd940d")
+	], 0.1, 0.05, (x, y) => boidUpdate(x, y, 2, 0.2, LIQUID_PASS_THROUGH), (x, y) => {
 		makeCircle(x, y - 1, TYPES.HONEY, 2);
 		explode(x, y - 1, 2);
 	}),

@@ -3969,7 +3969,7 @@ backgroundTex.shader((x, y, dest) => {
 	dest.set(
 		DATA[TYPES.TILE_BASE]
 			.getColor(fx, fy)
-			.times(0.2)
+			.times(0.1)
 			.opaque
 	);
 });

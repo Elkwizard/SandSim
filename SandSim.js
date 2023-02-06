@@ -368,7 +368,9 @@ class DYNAMIC_OBJECT extends ElementScript {
 			obj.transform.inverse,
 			Matrix3.scale(CELL)
 		]);
-	
+		
+		const localDY = new Vector2(toLocal.m01, toLocal.m11);
+
 		// border precomputing
 		const edges = gridBounds
 			.getEdges()
@@ -412,8 +414,10 @@ class DYNAMIC_OBJECT extends ElementScript {
 			if (c.x > bottomCutoff) bottom = bottomEdgeRight;
 			const minY = Math.max(Math.ceil(top.evaluate(c.x)), min.y);
 			const maxY = Math.min(Math.ceil(bottom.evaluate(c.x)) - 1, max.y);
-			for (c.y = minY; c.y <= maxY; c.y++) {
-				toLocal.times(c, local);
+			c.y = minY;
+			toLocal.times(c, local);
+			for (; c.y <= maxY; c.y++) {
+				local.add(localDY);
 				const lx = Math.floor(local.x);
 				const ly = Math.floor(local.y);
 				const cell = grid[lx]?.[ly];
@@ -474,9 +478,9 @@ class DYNAMIC_OBJECT extends ElementScript {
 		
 		this.forEachCell((cell, x, y) => {
 			const c = grid[x][y];
-			if (c.id !== TYPES.AIR && !STATIC_SOLID.has(c.id))
+			if (c.id && !STATIC_SOLID.has(c.id))
 				createParticle(new Vector2(x, y), new Vector2(Random.range(-1, 1), Random.range(-1, 1)));
-			cell.get(grid[x][y]);
+			cell.get(c);
 			Element.updateCell(x, y);
 		});
 	}
@@ -526,7 +530,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 					.sort((a, b) => a - b);
 	
 				for (let n = 0; n < stops.length; n += 2) {
-					const startY = Math.floor(stops[n]);
+					const startY = Math.floor(stops[n]) - 1;
 					const endY = Math.ceil(stops[n + 1]);
 					for (let j = startY; j <= endY; j++) {
 						for (let ii = 0; ii < DYNAMIC_OBJECT.RES; ii++)
@@ -4318,7 +4322,7 @@ function stepSleeping() {
 		const chunk = chunks[i][j];
 		chunk.sleep = chunk.sleepNext;
 		chunk.sleepNext = true;
-	}	
+	}
 }
 
 function displayWorld() {
@@ -4332,8 +4336,11 @@ function displayWorld() {
 			transparency: 0.8
 		});
 		// renderer.fill(Color.BLACK);
+		// renderer.preservePixelart = false;
 		renderer.image(backgroundTex).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
 		renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
+		// renderer.preservePixelart = true;
+		
 	});
 }
 

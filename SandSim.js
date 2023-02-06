@@ -16,10 +16,12 @@ const controls = {
 	"Shift + u": "Upload world from file",
 	"r": "Reset world",
 	"e": "Restore zoom",
-	"Shift + =": "Zoom in",
-	"Shift + -": "Zoom out",
-	"Shift + Arrow Keys": "Move camera",
-	"g": "Toggle 'RTX'"
+	"Shift + = & Mouse Wheel Up": "Zoom in",
+	"Shift + - & Mouse Wheel Down": "Zoom out",
+	"Shift + Arrow Keys & Control + Drag": "Move camera",
+	"Control + Click & Drag": "Move camera",
+	"g": "Toggle 'RTX'",
+	"a": "Animate Wall"
 };
 
 canvas.clearScreen = () => renderer.fill(Color.BLACK);
@@ -63,12 +65,34 @@ const TYPES = Object.fromEntries([
 const ELEMENT_COUNT = Object.keys(TYPES).length;
 
 class WorldSave {
-	static MAGIC_SAVE_CONSTANT = 0xcc910831; // indicates elements are stored absolutely
-	constructor(grid) {
+	static MAGIC_SAVE_CONSTANT_ELEMENT = 0xcc910831; // indicates elements are stored absolutely
+	static MAGIC_SAVE_CONSTANT_RIGIDBODY = 0xfebc1828;
+	constructor(grid, rigidbodies) {
 		this.grid = grid;
+		this.rigidbodies = rigidbodies;
+	}
+	static instantiateRigidbodies(bodies) {
+		for (let i = 0; i < bodies.length; i++) {
+			const body = bodies[i];
+			const obj = scene.main.addPhysicsElement("obj", 0, 0, true);
+			obj.transform.rotation = body.rotation;
+			obj.scripts.add(DYNAMIC_OBJECT, body.grid, body.upperLeft, Vector2.origin);
+
+		}
+	}
+	static getRigidbodies() {
+		return scene.main.getElementsWithScript(DYNAMIC_OBJECT)
+			.map(obj => {
+				const l = obj.scripts.DYNAMIC_OBJECT;
+				return {
+					rotation: obj.transform.rotation,
+					grid: l.grid.map(cell => cell.get()),
+					upperLeft: Vector2.floor(obj.transform.localSpaceToGlobalSpace(l.centerOfMass.inverse).over(CELL)).get()
+				};
+			});
 	}
 	toByteBuffer(buffer = new ByteBuffer()) {
-		buffer.write.uint32(WorldSave.MAGIC_SAVE_CONSTANT);
+		buffer.write.uint32(WorldSave.MAGIC_SAVE_CONSTANT_RIGIDBODY);
 		buffer.write.object(TYPES);
 		buffer.write.uint32(this.grid.length);
 		buffer.write.uint32(this.grid[0].length);
@@ -102,13 +126,36 @@ class WorldSave {
 
 		writeBlock();
 
+		const dyn = this.rigidbodies;
+
+		buffer.write.uint32(dyn.length);
+	
+		for (let i = 0; i < dyn.length; i++) {
+			const obj = dyn[i];
+			buffer.write.float64(obj.rotation);
+			obj.upperLeft.toByteBuffer(buffer);
+			buffer.write.uint32(obj.grid.length);
+			buffer.write.uint32(obj.grid[0].length);
+			for (let i = 0; i < obj.grid.length; i++) for (let j = 0; j < obj.grid[0].length; j++) {
+				const cell = obj.grid[i][j];
+				buffer.write.uint8(cell.id);
+				if (cell.id) {
+					buffer.write.uint8(cell.reference);
+					buffer.write.uint32(cell.acts);
+				}
+			}
+		}
+
 		return buffer;
 	}
 	static fromByteBuffer(buffer) {
 		let initial = buffer.read.uint32();
 		let width = initial;
 		let encodedTypes = TYPES;
-		if (initial === WorldSave.MAGIC_SAVE_CONSTANT) {
+		if (
+			initial === WorldSave.MAGIC_SAVE_CONSTANT_ELEMENT ||
+			initial === WorldSave.MAGIC_SAVE_CONSTANT_RIGIDBODY
+		) {
 			encodedTypes = buffer.read.object();
 			width = buffer.read.uint32();
 		}
@@ -120,7 +167,8 @@ class WorldSave {
 
 		const save = new WorldSave(
 			Array.dim(width, height)
-				.map(() => new Cell(TYPES.AIR))
+				.map(() => new Cell(TYPES.AIR)),
+			[]
 		);
 
 		let totalCells = 0;
@@ -146,16 +194,32 @@ class WorldSave {
 					}
 				}
 			} else {
-				for (let i = 0; i < duration; i++) {
-					y++;
-					if (y === height) {
-						y = 0;
-						x++;
-					}
-				}
+				y += duration;
+				x += ~~(y / height);
+				y %= height;
 				continue;
 			}
 
+		}
+
+		if (initial === WorldSave.MAGIC_SAVE_CONSTANT_RIGIDBODY) {
+			const rigidbodyCount = buffer.read.uint32();
+			for (let i = 0; i < rigidbodyCount; i++) {
+				const obj = {};
+				obj.rotation = buffer.read.float64();
+				obj.upperLeft = Vector2.fromByteBuffer(buffer);
+				obj.grid = Array.dim(buffer.read.uint32(), buffer.read.uint32())
+					.map(() => new Cell(TYPES.AIR));
+				for (let i = 0; i < obj.grid.length; i++) for (let j = 0; j < obj.grid[0].length; j++) {
+					const cell = obj.grid[i][j];
+					cell.id = buffer.read.uint8();
+					if (cell.id) {
+						cell.reference = buffer.read.uint8();
+						cell.acts = buffer.read.uint32();
+					}
+				}
+				save.rigidbodies.push(obj);
+			}
 		}
 
 		return save;
@@ -214,6 +278,7 @@ const HEIGHT = grid[0].length;
 
 class DYNAMIC_OBJECT extends ElementScript {
 	static RES = 2;
+	static SKIP = 20;
 	static DISTRIBUTION = 8;
 	static nextSlot = 0;
 	init(obj, grid, upperLeft, textureOffset) {
@@ -265,6 +330,19 @@ class DYNAMIC_OBJECT extends ElementScript {
 			Math.ceil(this.width / DYNAMIC_OBJECT.RES),
 			Math.ceil(this.height / DYNAMIC_OBJECT.RES)
 		).fill(false);
+		this.skipGrid = Array.dim(
+			Math.floor(this.width / DYNAMIC_OBJECT.SKIP),
+			Math.floor(this.height / DYNAMIC_OBJECT.SKIP)
+		).map((_, x, y) => {
+			x *= DYNAMIC_OBJECT.SKIP;
+			y *= DYNAMIC_OBJECT.SKIP;
+			for (let i = 0; i < DYNAMIC_OBJECT.SKIP; i++)
+			for (let j = 0; j < DYNAMIC_OBJECT.SKIP; j++) {
+				if (this.grid[x + i][y + j].id)
+					return false;
+			}
+			return true;
+		});
 
 		for (let i = 0; i < this.width; i++) for (let j = 0; j < this.height; j++) {
 			const cell = this.grid[i][j];
@@ -284,33 +362,119 @@ class DYNAMIC_OBJECT extends ElementScript {
 		this.rb.applyImpulseMass(closest, diff.times(vel));
 	}
 	forEachCell(obj, fn) {
-		const iCell = 1 / CELL;
-		const bounds = this.gridBounds
+		const { grid, skipGrid } = this;
+		const { SKIP } = DYNAMIC_OBJECT;
+
+		const gridBounds = this.gridBounds
 			.getModel(obj.transform)
-			.scaleAbout(Vector2.origin, iCell)
-			.getBoundingBox();
-		const boundsMin = new Vector2(0, 0);
-		const boundsMax = new Vector2(WIDTH - 1, HEIGHT - 1);
-		const min = Vector2.clamp(Vector2.floor(bounds.min), boundsMin, boundsMax);
-		const max = Vector2.clamp(Vector2.ceil(bounds.max), boundsMin, boundsMax);
-		const toLocal = Matrix3.mulMatrices([
-			Matrix3.translation(this.centerOfMass.x * iCell, this.centerOfMass.y * iCell),
-			Matrix3.scale(iCell, iCell),
-			obj.transform.inverse,
-			Matrix3.scale(CELL, CELL)
-		]);
+			.scaleAbout(Vector2.origin, 1 / CELL);
+		const bounds = gridBounds.getBoundingBox();
+		const globalMin = new Vector2(0, 0);
+		const globalMax = new Vector2(WIDTH - 1, HEIGHT - 1);
+		const min = Vector2.clamp(Vector2.floor(bounds.min), globalMin, globalMax);
+		const max = Vector2.clamp(Vector2.ceil(bounds.max), globalMin, globalMax);
 		const c = new Vector2(0, 0);
 		const local = new Vector2(0, 0);
+		const toLocal = Matrix3.mulMatrices([
+			Matrix3.scale(1 / CELL),
+			Matrix3.translation(this.centerOfMass),
+			obj.transform.inverse,
+			Matrix3.scale(CELL)
+		]);
+		
+		const localDY = new Vector2(toLocal.m01, toLocal.m11);
+
+		// border precomputing
+		const edges = gridBounds
+			.getEdges()
+			.sort((a, b) => a.middle.y - b.middle.y);
+	
+		let topEdgeLeft = edges[0];
+		let topEdgeRight = edges[1];
+		if (topEdgeRight.middle.x < topEdgeLeft.middle.x)
+			[topEdgeLeft, topEdgeRight] = [topEdgeRight, topEdgeLeft];
+	
+		let bottomEdgeLeft = edges[2];
+		let bottomEdgeRight = edges[3];
+		if (bottomEdgeRight.middle.x < bottomEdgeLeft.middle.x)
+			[bottomEdgeLeft, bottomEdgeRight] = [bottomEdgeRight, bottomEdgeLeft];
+	
+		const topCutoff = topEdgeLeft.b.x;
+		const bottomCutoff = bottomEdgeLeft.a.x;
+	
+		let top = topEdgeLeft;
+		let bottom = bottomEdgeLeft;
+	
+		// skip grid precomputing
+		const angle = Geometry.normalizeAngle(obj.transform.rotation);
+		const skipRadius = SKIP * Math.SQRT1_2;
+		const modAngle = Math.PI / 4 + (angle % (Math.PI / 2));
+		const offAngle = Math.PI / 4 + angle;
+		const vertexOffsetX = (Math.cos(modAngle) + Math.cos(offAngle)) * skipRadius;
+		const vertexOffsetY = (Math.sin(modAngle) + Math.sin(offAngle)) * skipRadius;
+		const leftSkipSlope = Math.tan((angle % (Math.PI / 2)));
+		const rightSkipSlope = Math.tan((angle % (Math.PI / 2)) + Math.PI / 2);
+		const skipToVertex = Matrix3.mulMatrices([
+			Matrix3.translation(vertexOffsetX, vertexOffsetY),
+			toLocal.inverse,
+			Matrix3.scale(SKIP)
+		]);
+		const skip = new Vector2(0, 0);
+		const vertex = new Vector2(0, 0);
+	
 		for (c.x = min.x; c.x <= max.x; c.x++) {
-			for (c.y = min.y; c.y <= max.y; c.y++) {
-				toLocal.times(c, local);
-				let { x, y } = local;
-				if (x >= 0 && y >= 0 && x < this.width && y < this.height) {
-					const cell = this.grid[~~x][~~y];
-					if (cell.id) fn(cell, c.x, c.y);
+			if (c.x > topCutoff) top = topEdgeRight;
+			if (c.x > bottomCutoff) bottom = bottomEdgeRight;
+			const minY = Math.max(Math.ceil(top.evaluate(c.x)), min.y);
+			const maxY = Math.min(Math.ceil(bottom.evaluate(c.x)) - 1, max.y);
+			c.y = minY;
+			toLocal.times(c, local);
+			for (; c.y <= maxY; c.y++) {
+				local.add(localDY);
+				const lx = Math.floor(local.x);
+				const ly = Math.floor(local.y);
+				const cell = grid[lx]?.[ly];
+				if (cell?.id) fn(cell, c.x, c.y);
+				else {
+					skip.x = Math.floor(lx / SKIP);
+					skip.y = Math.floor(ly / SKIP);
+					if (skipGrid[skip.x]?.[skip.y]) {
+						skipToVertex.times(skip, vertex);
+						const slope = c.x > vertex.x ? rightSkipSlope : leftSkipSlope;
+						const intersectY = (c.x - vertex.x) * slope + vertex.y;
+						c.y = Math.floor(intersectY);
+					}
 				}
 			}
 		}
+
+		// const iCell = 1 / CELL;
+		// const bounds = this.gridBounds
+		// 	.getModel(obj.transform)
+		// 	.scaleAbout(Vector2.origin, iCell)
+		// 	.getBoundingBox();
+		// const boundsMin = new Vector2(0, 0);
+		// const boundsMax = new Vector2(WIDTH - 1, HEIGHT - 1);
+		// const min = Vector2.clamp(Vector2.floor(bounds.min), boundsMin, boundsMax);
+		// const max = Vector2.clamp(Vector2.ceil(bounds.max), boundsMin, boundsMax);
+		// const toLocal = Matrix3.mulMatrices([
+		// 	Matrix3.translation(this.centerOfMass.x * iCell, this.centerOfMass.y * iCell),
+		// 	Matrix3.scale(iCell, iCell),
+		// 	obj.transform.inverse,
+		// 	Matrix3.scale(CELL, CELL)
+		// ]);
+		// const c = new Vector2(0, 0);
+		// const local = new Vector2(0, 0);
+		// for (c.x = min.x; c.x <= max.x; c.x++) {
+		// 	for (c.y = min.y; c.y <= max.y; c.y++) {
+		// 		toLocal.times(c, local);
+		// 		let { x, y } = local;
+		// 		if (x >= 0 && y >= 0 && x < this.width && y < this.height) {
+		// 			const cell = this.grid[~~x][~~y];
+		// 			if (cell.id) fn(cell, c.x, c.y);
+		// 		}
+		// 	}
+		// }
 	}
 	removeIfNecessary(obj) {
 		if ((obj.defaultShape && !obj.getBoundingBox().intersect(new Rect(0, 0, width, height))) || isNaN(obj.transform.position)) {
@@ -327,9 +491,9 @@ class DYNAMIC_OBJECT extends ElementScript {
 		
 		this.forEachCell((cell, x, y) => {
 			const c = grid[x][y];
-			if (c.id !== TYPES.AIR && !STATIC_SOLID.has(c.id))
+			if (c.id && !STATIC_SOLID.has(c.id))
 				createParticle(new Vector2(x, y), new Vector2(Random.range(-1, 1), Random.range(-1, 1)));
-			cell.get(grid[x][y]);
+			cell.get(c);
 			Element.updateCell(x, y);
 		});
 	}
@@ -337,9 +501,10 @@ class DYNAMIC_OBJECT extends ElementScript {
 		this.forEachCell((cell, x, y) => {
 			if (grid[x][y].sameType(cell)) {
 				Element.die(x, y);
-				tex.setPixel(x, y, this.colors.get(cell));
+				tex.shaderSetPixel(x, y, this.colors.get(cell));
 			} else cell.id = TYPES.AIR;
 		});
+		tex.loaded = false;
 
 		const { defaultShape } = obj;
 
@@ -378,7 +543,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 					.sort((a, b) => a - b);
 	
 				for (let n = 0; n < stops.length; n += 2) {
-					const startY = Math.floor(stops[n]);
+					const startY = Math.floor(stops[n]) - 1;
 					const endY = Math.ceil(stops[n + 1]);
 					for (let j = startY; j <= endY; j++) {
 						for (let ii = 0; ii < DYNAMIC_OBJECT.RES; ii++)
@@ -399,14 +564,15 @@ class DYNAMIC_OBJECT extends ElementScript {
 
 		const shapes = Geometry.gridToExactPolygons(this.smallGrid, 1)
 			.filter(shape => shape.area > 2 ** 2)
-			.map(shape => Geometry.simplify(shape, 0.5));
+			.map(shape => Geometry.simplify(shape, 0.5))
+			.sort((a, b) => a.area - b.area);
 		
 		if (!shapes.length) {
 			obj.remove();
 			return;
 		}
 
-		const inflateDist = Math.SQRT2 * CELL;
+		const inflateDist = CELL;//Math.SQRT2 * CELL;
 
 		if (shapes.length === 1 && intervals.frameCount % DYNAMIC_OBJECT.DISTRIBUTION !== this.slot) {
 			const newCenterOfMass = DYNAMIC_OBJECT.computeCenterOfMass(this.grid);
@@ -469,6 +635,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 		if (keyboard.pressed("c")) {
 			renderer.stroke(Color.RED).infer(shape);
 			renderer.draw(Color.RED).circle(0, 0, CELL);
+			renderer.stroke(new Color(255, 255, 0, 0.5), CELL).rect(this.gridBounds);
 		}
 		// renderer.drawThrough(obj.transform, () => {
 		// 	renderer.image(this.tex).rect(this.gridBounds);
@@ -485,8 +652,8 @@ class DYNAMIC_OBJECT extends ElementScript {
 class CHUNK_COLLIDER extends ElementScript {
 	static RES = 3;
 	static MIN_FILL_PERCENT = 0.05;
-	static MIN_SHAPE_AREA_PERCENT = 0.1;
-	static DISTRIBUTION = 3;
+	static MIN_SHAPE_AREA_PERCENT = 0.03;
+	static DISTRIBUTION = 4;
 	static nextSlot = 0;
 	static isSolid(cell) {
 		if (cell.id === TYPES.ELECTRICITY) return SOLID.has(cell.reference);
@@ -504,6 +671,8 @@ class CHUNK_COLLIDER extends ElementScript {
 		obj.mouseEvents = false;
 	}
 	remesh(obj) {
+		this.shouldUpdate = false;
+
 		let solid = 0;
 		for (let i = 0; i < this.size; i++)
 		for (let j = 0; j < this.size; j++) {
@@ -527,13 +696,11 @@ class CHUNK_COLLIDER extends ElementScript {
 				continue;
 			obj.addShape(String(i), Geometry.joinEdges(shape, 0.5));
 		}
-
-		this.shouldUpdate = false;
 	}
 	update(obj) {
-		if (this.chunk.sleep && !this.shouldUpdate)
+		this.shouldUpdate ||= !this.chunk.sleep;
+		if (!this.shouldUpdate)
 			return;
-		this.shouldUpdate = true;
 		if (intervals.frameCount % CHUNK_COLLIDER.DISTRIBUTION !== this.slot)
 			return;
 		
@@ -545,25 +712,25 @@ class CHUNK_COLLIDER extends ElementScript {
 }
 
 { // walls
-	const floor = scene.main.addPhysicsRectElement("floor", width / 2, height + 50, width, 100, false, new Controls("w", "s", "a", "d"), "No Tag");
-	const ceiling = scene.main.addPhysicsRectElement("ceiling", width / 2, -50, width, 100, false, new Controls("w", "s", "a", "d"), "No Tag");
+	const floor = scene.main.addPhysicsRectElement("floor", width / 2, height + 50, width + 200, 100, false, new Controls("w", "s", "a", "d"), "No Tag");
+	const ceiling = scene.main.addPhysicsRectElement("ceiling", width / 2, -50, width + 200, 100, false, new Controls("w", "s", "a", "d"), "No Tag");
 	const leftWall = scene.main.addPhysicsRectElement("leftWall", -50, height / 2, 100, height, false, new Controls("w", "s", "a", "d"), "No Tag");
 	const rightWall = scene.main.addPhysicsRectElement("rightWall", width + 50, height / 2, 100, height, false, new Controls("w", "s", "a", "d"), "No Tag");
 };
 
-intervals.continuous(time => {
-	if (keyboard.pressed("Control") && mouse.justPressed("Left") && STATIC_SOLID.has(brush)) {
-		const obj = scene.main.addPhysicsElement("obj", 0, 0, true, new Controls("w", "s", "a", "d"), "No Tag");
-		const radius = Math.ceil(Random.range(10, 20));
-		const grid = Array.dim(radius * 2 + 1, radius * 2 + 1);
-		for (let i = -radius; i <= radius; i++) {
-			for (let j = -radius; j <= radius; j++) {
-				grid[i + radius][j + radius] = new Cell(i ** 2 + j ** 2 < radius ** 2 ? brush : TYPES.AIR);
-			}
-		}
-		obj.scripts.add(DYNAMIC_OBJECT, grid, Vector2.floor(mouse.world.over(CELL)).minus(radius));
-	}
-}, IntervalFunction.AFTER_UPDATE);
+// intervals.continuous(time => {
+// 	if (keyboard.pressed("Control") && mouse.justPressed("Left") && STATIC_SOLID.has(brush)) {
+// 		const obj = scene.main.addPhysicsElement("obj", 0, 0, true, new Controls("w", "s", "a", "d"), "No Tag");
+// 		const radius = Math.ceil(Random.range(10, 20));
+// 		const grid = Array.dim(radius * 2 + 1, radius * 2 + 1);
+// 		for (let i = -radius; i <= radius; i++) {
+// 			for (let j = -radius; j <= radius; j++) {
+// 				grid[i + radius][j + radius] = new Cell(i ** 2 + j ** 2 < radius ** 2 ? brush : TYPES.AIR);
+// 			}
+// 		}
+// 		obj.scripts.add(DYNAMIC_OBJECT, grid, Vector2.floor(mouse.world.over(CELL)).minus(radius));
+// 	}
+// }, IntervalFunction.AFTER_UPDATE);
 
 class Chunk {
 	constructor(x, y) {
@@ -830,6 +997,15 @@ class Element {
 		}
 	}
 
+	static probabilityAffectNeighbors(x, y, effect, range, samples) {
+		for (let i = 0; i < samples; i++) {
+			const ox = x + Random.int(-range, range);
+			const oy = y + Random.int(-range, range);
+			if (x !== ox && y !== oy && Element.inBounds(ox, oy) && grid[ox][oy].id !== TYPES.AIR)
+				effect(ox, oy);
+		}
+	}
+
 	static tryBurn(x, y, type) {
 		const cell = grid[x][y];
 		if (cell.id !== type) {
@@ -1058,7 +1234,7 @@ const DISPERSION = 4;
 
 scene.physicsEngine.gravity.y = GRAVITY * CELL;
 
-const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT]);
+const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT, TYPES.INCENSE_SMOKE]);
 const LIQUID = new Set([TYPES.WATER, TYPES.LAVA, TYPES.POWER_LAVA, TYPES.BLOOD, TYPES.ESTIUM, TYPES.DECUMAN_GLAZE, TYPES.GLAZE_BASE, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
 const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE]);
 const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, ...GAS]);
@@ -1269,13 +1445,90 @@ const fluidUpdate = (x, y, direction, accel, passthrough) => {
 	} else vel.y = 0;
 };
 
-function beeUpdate(x, y, passthrough) {
+function chaosUpdate(x, y, passthrough) {
 	const angle = Random.angle();
 	const cos = Math.cos(angle);
 	const sin = Math.sin(angle);
 	if (!Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin), passthrough))
 		Element.updateCell(x, y);
 }
+
+const boidUpdate = (x, y, maxSpeed = 4, accuracy = 1, passthrough) => { // by val (mostly)
+	const cell = grid[x][y];
+	const type = cell.id;
+	const cellPV = new Vector2(x,y); 
+
+	//variables
+	const separationRadius = 10;
+	const separation = 2;
+	const cohersion = 10; //over some value
+	const alignment = 2;
+	const jitterRange = 0.1;
+	const boundingRange = 25;
+	const boundingStrength = 0.003;
+	const samplingRange = 30;
+	const samplingAmount = 40 * accuracy;
+
+
+	//rules
+	let cohesionV = new Vector2(0, 0); //cohesion
+	let separationV = new Vector2(0, 0); //seperation
+	let alignmentV = new Vector2(0, 0);	//alignment
+	cell.vel.rotate(Random.range(-jitterRange, jitterRange));
+	cell.vel.mag += Random.range(-jitterRange, jitterRange);
+	let boundingV = new Vector2(0,0); //bounding
+	
+	//boundary code
+	// if (cellPV.x < boundingRange || cellPV.x > WIDTH-boundingRange || cellPV.y < boundingRange || cellPV.y > HEIGHT-boundingRange){
+	// 	// cell.vel.rotate(boundingStrength);
+	// 	cell.vel.add(new Vector2(WIDTH / 2, HEIGHT / 2).minus(cellPV).times(boundingStrength))
+	// }
+
+	let count = 0;
+	Element.probabilityAffectNeighbors(x, y, (ox, oy) => {
+		if(Element.isType(ox,oy,type)){
+			count++;
+			const otherBoidPV = new Vector2(ox,oy);
+			const otherBoidCell = grid[ox][oy];
+
+			//rule 1, going towards center of flock
+			cohesionV = cohesionV.add(otherBoidPV);
+
+			//rule 2, avoid collision with other boids
+			if (otherBoidPV.minus(cellPV).mag < separationRadius) {
+				separationV.add(cellPV.minus(otherBoidPV));
+			}
+
+			//rule 3, try to match velocity of surrounding boids
+			alignmentV = alignmentV.add(otherBoidCell.vel);
+		}
+	}, samplingRange, samplingAmount);
+	
+	if (count > 0) {
+		//position correction
+		cohesionV.div(count); 
+		cohesionV.sub(cellPV).normalize().div(cohersion); 
+
+		separationV.div(count);
+		separationV.div(separation);
+
+		//velocity correction
+		alignmentV.div(count);
+		alignmentV.sub(cell.vel).div(alignment)
+	}
+
+	//to add more rules add the vectors to the sum
+	cell.vel.add(Vector2.sum([cohesionV, separationV, alignmentV,boundingV]));
+	cell.vel.mag = Number.clamp(cell.vel.mag, 1, maxSpeed);
+	// cell.vel.mul(0.95);
+	const dx = Math.round(cell.vel.x); 
+	const dy = Math.round(cell.vel.y);
+	if (!Element.tryMove(x, y, x + dx, y + dy, passthrough)) {
+		cell.vel.invert();
+		Element.updateCell(x, y);
+	}
+}
+
 
 const fireUpdate = (x, y, type, up = true) => {
 	let neighbors = 0;
@@ -2390,7 +2643,7 @@ const DATA = {
 		if (Random.bool(.03)) {
 			Element.setCell(x, y, TYPES.WATER);
 			return true;
-		}SH
+		}
 	}),
 
 	[TYPES.SOIL]: new Element(1, freqColoring([
@@ -2459,7 +2712,8 @@ const DATA = {
 		if(Random.bool(.0008) && grid[x][y].acts > 1){
 			let h = grid[x][y].acts;
 			grid[x][y].acts = -1;
-			grid[x][y+1].acts = -1;
+			if (Element.inBounds(x, y + 1))
+				grid[x][y+1].acts = -1;
 			let d = Random.bool() ? -1 : 1;
 			let a = Random.range(-Math.PI/5, Math.PI/5)
 			let ox = Math.ceil(Math.cos(a)*d*(h/3) + Random.range(-4, 10)) + x;
@@ -2701,7 +2955,7 @@ const DATA = {
 		return true;
 	}),
 	[TYPES.POWER_LAVA]: new Element(100, [Color.CYAN, Color.BLUE, Color.SKY_BLUE], 0.7, 0, (x, y) => {
-		fluidUpdate(x, y, 1, GRAVITY, SOLID_PASS_THROUGH);
+		liquidUpdate(x, y);
 
 		Element.react(x, y - Math.floor((Math.random() * 6)), TYPES.AIR, TYPES.BLUE_FIRE, 0.007);
 		Element.reactMany(x, y, WATER_TYPES, TYPES.SMOKE, 0.005);
@@ -2841,7 +3095,11 @@ const DATA = {
 		if (Random.bool(.7)) Element.trySetCell(x, y - 1, Random.bool(.05) ? TYPES.ASH : TYPES.SMOKE);
 		Element.trySetCell(x, y - 1, Random.bool(.3) ? TYPES.MOLTEN_WAX : TYPES.HONEY);
 	}),
-	[TYPES.BEE]: new Element(2, [new Color("#e8d207"), new Color("#ffe812"), new Color("#f5e764"), new Color("#e6d42c"), new Color("#d1a81f"), new Color("#bd940d")], 0.1, 0.05, (x, y) => beeUpdate(x, y, LIQUID_PASS_THROUGH), (x, y) => {
+	[TYPES.BEE]: new Element(2, [
+		new Color("#e8d207"), new Color("#ffe812"),
+		new Color("#f5e764"), new Color("#e6d42c"),
+		new Color("#d1a81f"), new Color("#bd940d")
+	], 0.1, 0.05, (x, y) => boidUpdate(x, y, 2, 0.2, LIQUID_PASS_THROUGH), (x, y) => {
 		makeCircle(x, y - 1, TYPES.HONEY, 2);
 		explode(x, y - 1, 2);
 	}),
@@ -3365,6 +3623,9 @@ class SETTINGS extends ElementScript {
 	init(obj, type) {
 		obj.scripts.removeDefault();
 		this.type = type;
+		this.totalControls = Object.entries(controls).length;
+		this.rowHeight = obj.height / this.totalControls;
+		this.font = new Font(this.rowHeight * 0.7, "Arial");
 	}
 	click(obj) {
 	}
@@ -3372,12 +3633,22 @@ class SETTINGS extends ElementScript {
 		obj.hidden = !SETTINGS_SHOWN;
 	}
 	draw(obj, name, shape) {
-		renderer.draw(Color.WHITE).rect(width * .125, height * .125, width * .75, height * .75);
+		renderer.draw(Color.WHITE).rect(shape);
+		const borderColor = Color.GRAY;
+		const entries = Object.entries(controls);
+		for (let i = 0; i < this.totalControls; i++) {
+			const y = shape.y + i * this.rowHeight;
+			renderer.stroke(borderColor).rect(-shape.width / 2, y, shape.width, this.rowHeight);
+			renderer.textMode = TextMode.CENTER_CENTER;
+			renderer.draw(Color.BLACK).text(this.font, entries[i][0], -shape.width / 4, y + this.rowHeight / 2);
+			renderer.textMode = TextMode.CENTER_CENTER;
+			renderer.draw(Color.BLACK).text(this.font, entries[i][1], shape.width / 4, y + this.rowHeight / 2);
+		}
+		renderer.stroke(borderColor).line(0, -shape.height / 2, 0, shape.height / 2);
+
 	}
-	static create(type) {
-		const panel = scene.main.addUIElement("panel", 0, 0, 0, 0);
-		//const exit = scene.main.addUIElement("button", x + this.SIZE / 2, y + this.SIZE / 2, this.SIZE, this.SIZE);
-		//exit.scripts.add(SETTINGS)
+	static create() {
+		const panel = scene.main.addUIElement("panel", width / 2, height / 2, width * 0.75, height * 0.75);
 		panel.scripts.add(SETTINGS);
 		return panel;
 	}
@@ -3708,7 +3979,7 @@ function text(font, text, x, y) {
 
 const PAN_SENSITIVITY = 20;
 const ZOOM_SENSITIVITY = 0.1
-let SELECTORS_SHOWN = false;
+let SELECTORS_SHOWN = true;
 let SETTINGS_SHOWN = false;
 
 const BRUSH_TYPES = ["Circle", "Square", "Ring", "Forceful", "Row", "Column", "EraseOnly"]
@@ -3723,7 +3994,17 @@ let debugOscillating = false;
 let lightSources = [];
 
 const backgroundTex = new Texture(WIDTH, HEIGHT);
-backgroundTex.shader((x, y, dest) => dest.set(DATA[TYPES.TILE_BASE].getColor(x, y).times(0.3).opaque));
+backgroundTex.shader((x, y, dest) => {
+	const factor = 1.2;
+	const fx = Number.clamp(~~(x / factor), 0, WIDTH - 1);
+	const fy = Number.clamp(~~(y / factor), 0, HEIGHT - 1);
+	dest.set(
+		DATA[TYPES.TILE_BASE]
+			.getColor(fx, fy)
+			.times(0.1)
+			.opaque
+	);
+});
 
 function handleBrushInput() {
 	if (keyboard.pressed("Control")) return;
@@ -3836,28 +4117,34 @@ function handleBrushInput() {
 
 function handleInput() {
 	
-	function clearNonGrid() {
+	function clearAll() {
+		for (let x = 0; x < WIDTH; x++)
+		for (let y = 0; y < HEIGHT; y++)
+			Element.setCell(x, y, TYPES.AIR);
 		scene.main.removeElements(scene.main.getElementsWithScript(DYNAMIC_OBJECT));
 		for (let i = 0; i < particles.length; i++)
 			particles[i].remove();
 		particles = [];	
+		for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++)
+			chunks[i][j].sceneObject.scripts.CHUNK_COLLIDER.remesh();
 	}
 
 	if (keyboard.justPressed("d")) { // download
-		fileSystem.writeFile(SAVE_FILE_PATH, new WorldSave(grid));
+		fileSystem.writeFile(SAVE_FILE_PATH, new WorldSave(grid, WorldSave.getRigidbodies()));
 		if (keyboard.pressed("Shift")) fileSystem.downloadFile(SAVE_FILE_PATH);
 	}
 
 	if (keyboard.justPressed("u")) { // upload
 		const replace = () => {
-			clearNonGrid();
-			const { grid: uploadedGrid } = fileSystem.readFile(SAVE_FILE_PATH);
+			clearAll();
+			const { grid: uploadedGrid, rigidbodies } = fileSystem.readFile(SAVE_FILE_PATH);
 			const w = Math.min(WIDTH, uploadedGrid.length);
 			const h = Math.min(HEIGHT, uploadedGrid[0].length);
 			for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) {
 				grid[i][j] = uploadedGrid[i][j];
 				Element.updateCell(i, j);
 			}
+			WorldSave.instantiateRigidbodies(rigidbodies);
 		};
 		if (keyboard.pressed("Shift"))
 			fileSystem.uploadFile(SAVE_FILE_PATH).then(replace);
@@ -3879,10 +4166,7 @@ function handleInput() {
 					scene.camera.restoreZoom();
 					scene.camera.position = middle;
 				} else if (key === "r") {
-					for (let x = 0; x < WIDTH; x++)
-						for (let y = 0; y < HEIGHT; y++)
-							Element.setCell(x, y, TYPES.AIR);
-					clearNonGrid();		
+					clearAll();		
 				} else if (key === "a") {
 					const { x: mx, y: my } = Vector2.floor(mouse.world.over(CELL));
 					if (Element.inBounds(mx, my) && STATIC_SOLID.has(grid[mx][my].id)) {
@@ -3931,8 +4215,9 @@ function handleInput() {
 						for (let j = minChunk.y; j <= maxChunk.y; j++) {
 							chunks[i][j].sceneObject.scripts.CHUNK_COLLIDER.remesh();
 						}
-						const obj = scene.main.addPhysicsElement("obj", 0, 0, true);
+						const obj = scene.main.addPhysicsElement("obj", 0, 0, true, new Controls("i", "k", "j", "l"));
 						obj.scripts.add(DYNAMIC_OBJECT, objGrid, new Vector2(x, y));
+						if (keyboard.pressed("l")) obj.scripts.add(PLAYER_MOVEMENT);
 					}
 				} else if (key == "0") brushType = 0;
 				else if (key == "1") brushType = 1;
@@ -4065,7 +4350,7 @@ function stepSleeping() {
 		const chunk = chunks[i][j];
 		chunk.sleep = chunk.sleepNext;
 		chunk.sleepNext = true;
-	}	
+	}
 }
 
 function displayWorld() {
@@ -4079,8 +4364,11 @@ function displayWorld() {
 			transparency: 0.8
 		});
 		// renderer.fill(Color.BLACK);
+		// renderer.preservePixelart = false;
 		renderer.image(backgroundTex).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
 		renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
+		// renderer.preservePixelart = true;
+		
 	});
 }
 

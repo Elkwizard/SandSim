@@ -539,7 +539,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 							const y = j * DYNAMIC_OBJECT.RES + jj;
 							if (x >= 0 && y >= 0 && x < this.width && y < this.height) {
 								grid[x - minX * DYNAMIC_OBJECT.RES][y - minY * DYNAMIC_OBJECT.RES] = this.grid[x][y];
-								this.grid[x][y] = new Cell(TYPES.AIR);	
+								this.grid[x][y] = new Cell(TYPES.AIR);
 							}
 						}
 					}
@@ -1355,7 +1355,7 @@ class Particle {
 		
 		updatePixel(Math.floor(this.lastPosition.x), Math.floor(this.lastPosition.y));
 
-		// if (grid[x][y].id === TYPES.AIR)
+		if (grid[x][y].id === TYPES.AIR)
 			tex.setPixel(x, y, this.color);//new Color(0, 255, 0, Color.EPSILON));
 		// renderer.draw(this.color).rect(Math.floor(this.position.x) * CELL, Math.floor(this.position.y) * CELL, CELL, CELL);
 		// renderer.stroke(Color.RED).arrow(Math.floor(this.position.x) * CELL, Math.floor(this.position.y) * CELL, Math.floor(this.position.x + this.velocity.x) * CELL, Math.floor(this.position.y + this.velocity.y) * CELL);
@@ -4505,8 +4505,8 @@ intervals.continuous(time => {
 		}
 		
 		stepGraphics();
-		extractDynamicBodies(); // also displays them
 		stepParticleGraphics();
+		extractDynamicBodies(); // also displays them
 		
 		if (simStep) stepSleeping();
 

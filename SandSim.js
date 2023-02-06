@@ -290,6 +290,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 		this.centerOfMass = Vector2.origin;
 		this.setGrid(grid, Vector2.origin);
 		this.slot = (DYNAMIC_OBJECT.nextSlot++) % DYNAMIC_OBJECT.DISTRIBUTION;
+		this.collidingObjects = new Map();
 	}
 	static computeCenterOfMass(grid) {
 		const centerOfMass = Vector2.origin;
@@ -302,6 +303,18 @@ class DYNAMIC_OBJECT extends ElementScript {
 			}
 		}
 		return centerOfMass.mul(CELL / total);
+	}
+	collideGeneral(obj, { element }) {
+		if (!this.collidingObjects.has(element)) {
+			this.collidingObjects.set(element);
+			synth.play({
+				duration: 10,
+				frequency: Random.range(600, 800),
+				volume: 0.3,
+				wave: "sine",
+				fadeOut: 100
+			});
+		}
 	}
 	setGrid(obj, grid, gridOffset) {
 		this.grid = grid;
@@ -615,6 +628,8 @@ class DYNAMIC_OBJECT extends ElementScript {
 	update(obj) {
 		const { rb } = this;
 		rb.mobile = !paused;
+		for (const [key, count] of this.collidingObjects)
+			this.collidingObjects.set(key, count - 1);
 	}
 	draw(obj, name, shape) {
 		if (keyboard.pressed("c")) {
@@ -1247,6 +1262,7 @@ const NEURON = new Set([TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON])
 const BRAIN = new Set([...NEURON, TYPES.CEREBRUM])
 const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD, TYPES.BONE])
 const THICKETS = new Set([TYPES.THICKET, TYPES.INCENSE, TYPES.THICKET_BUD, TYPES.THICKET_SEED, TYPES.INCENSE_SMOKE, TYPES.THICKET_STEM]);
+const ACID_IMMUNE = new Set([TYPES.ACID, TYPES.GLASS]);
 
 function updatePixel(x, y) {
 	tex.setPixel(x, y, DATA[grid[x][y].id].getColor(x, y));
@@ -2579,9 +2595,17 @@ const DATA = {
 		// return Color.lerp(new Color("#a8f0bb01"), new Color("#d1f0d900"), p)
 
 	}, 0.1, 0.3, (x, y) => {
-		if ((Random.bool(Random.perlin2D(x, y, .03)))) Element.react(x, y, TYPES.AIR, TYPES.BAHHUM);
-		else if (Random.bool(.01)) Element.react(x, y, TYPES.AIR, TYPES.BAHHUM);
-		else if (Element.isType(x, y - 1, TYPES.AIR) || Element.isType(x, y + 1, TYPES.AIR) || Element.isType(x - 1, y, TYPES.AIR) || Element.isType(x + 1, y, TYPES.AIR)) Element.updateCell(x, y);
+		if ((Random.bool(Math.max(Random.perlin2D(x, y, .03), 0.01)))) {
+			if (Element.react(x, y, TYPES.AIR, TYPES.BAHHUM)) {
+				if (Random.bool(0.005)) synth.play({
+					duration: 10,
+					frequency: Random.range(300, 500),
+					volume: 1,
+					wave: "sine",
+					fadeOut: 10
+				});
+			}
+		} else if (Element.isType(x, y - 1, TYPES.AIR) || Element.isType(x, y + 1, TYPES.AIR) || Element.isType(x - 1, y, TYPES.AIR) || Element.isType(x + 1, y, TYPES.AIR)) Element.updateCell(x, y);
 
 		Element.consumeReact(x, y, TYPES.DDT, TYPES.LIGHTNING)
 	}),
@@ -3113,18 +3137,22 @@ const DATA = {
 	[TYPES.ACID]: new Element(30, [Color.LIME, new Color("#2dfc2d")], 0.1, 0, (x, y) => {
 		const cell = grid[x][y];
 		Element.affectNeighbors(x, y, (x, y) => {
-			if (!Element.isType(x, y, TYPES.ACID) && !Element.isType(x, y, TYPES.GLASS) && Random.bool(0.5)) {
-				if (Element.isType(x, y, TYPES.CONDENSED_STONE)) {
-					if (Random.bool(.0004)) {
-						Element.setCell(x, y, TYPES.AIR);
-						cell.acts++;
-					}
-					else Element.updateCell(x, y)
-				}
-				else {
+			if (!Element.isTypes(x, y, ACID_IMMUNE) && Random.bool(0.5)) {
+				const isStone = Element.isType(x, y, TYPES.CONDENSED_STONE);
+				const bool = Random.bool(.0004);
+				if (!isStone || (isStone && bool)) {
 					Element.setCell(x, y, TYPES.AIR);
+					if (Random.bool(0.05)) synth.play({
+						duration: 10,
+						frequency: Random.range(200, 300),
+						fadeOut: 1000,
+						wave: "sine",
+						volume: 1
+					})
 					cell.acts++;
 				}
+				if (isStone && !bool)
+					Element.updateCell(x, y);
 			}
 		});
 

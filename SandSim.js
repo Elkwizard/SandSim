@@ -7,6 +7,7 @@ const controls = {
 	"Touch/Click": "Draw with current brush",
 	"Up/Down Arrows": "Change brush size",
 	"</> & Left/Right Arrows": "Change brush type",
+	"p": "Toggle erase only",
 	"Space": "Pause/Play",
 	"Enter": "Advance one step while paused",
 	"s": "Open element selection window",

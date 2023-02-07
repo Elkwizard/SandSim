@@ -3982,8 +3982,9 @@ const ZOOM_SENSITIVITY = 0.1
 let SELECTORS_SHOWN = true;
 let SETTINGS_SHOWN = false;
 
-const BRUSH_TYPES = ["Circle", "Square", "Ring", "Forceful", "Row", "Column", "EraseOnly"]
+const BRUSH_TYPES = ["Circle", "Square", "Ring", "Forceful", "Row", "Column"]
 let brushType = 0;
+let eraseOnly = false;
 
 let currentDebugColor = Color.RED;
 let debugColor1 = Color.RED;
@@ -4032,7 +4033,13 @@ function handleBrushInput() {
 				if (Element.inBounds(x, y)) {
 					if (brush === TYPES.EXOTHERMIA)
 						Element.tryBurn(x, y, TYPES.FIRE);
-					else if (brush === TYPES.AIR || Element.isEmpty(x, y))
+					else if (brush !== TYPES.AIR && eraseOnly) {
+						const { id } = grid[x][y];
+						if (
+							id === brush ||
+							(DATA[id].reference && grid[x][y].reference === brush)
+						) Element.setCell(x, y, TYPES.AIR);
+					} else if (brush === TYPES.AIR || Element.isEmpty(x, y))
 						Element.setCell(x, y, brush);
 				}
 			};
@@ -4165,6 +4172,8 @@ function handleInput() {
 				else if (key === "e") {
 					scene.camera.restoreZoom();
 					scene.camera.position = middle;
+				} else if (key === "p") {
+					eraseOnly = !eraseOnly;
 				} else if (key === "r") {
 					clearAll();		
 				} else if (key === "a") {
@@ -4382,7 +4391,7 @@ function displayBrushPreview() {
 	scene.camera.drawInWorldSpace(() => {
 
 		// brush previews
-		const brushPreviewArgs = [Color.LIME, 1 / scene.camera.zoom];
+		const brushPreviewArgs = [eraseOnly ? Color.RED : Color.LIME, 1 / scene.camera.zoom];
 		const cellBrushSize = brushSize * CELL;
 		renderer.draw(brushPreviewArgs[0]).circle(mouse.world, brushPreviewArgs[1]);
 		switch (BRUSH_TYPES[brushType]) {
@@ -4404,9 +4413,6 @@ function displayBrushPreview() {
 				break;
 			case "Column":
 				renderer.stroke(...brushPreviewArgs).rect(mouse.world.x - cellBrushSize, 0, cellBrushSize * 2, HEIGHT * CELL);
-				break;
-			case "EraseOnly":
-				renderer.stroke(Color.RED, ...brushPreviewArgs.slice(1)).circle(mouse.world, cellBrushSize);
 				break;
 
 		}

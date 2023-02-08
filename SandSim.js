@@ -308,10 +308,12 @@ class DYNAMIC_OBJECT extends ElementScript {
 	collideGeneral(obj, { element }) {
 		if (!this.collidingObjects.has(element)) {
 			this.collidingObjects.set(element);
+			
+			const momentum = obj.scripts.PHYSICS.mass + element.scripts.PHYSICS.mass;
 			synth.play({
 				duration: 10,
 				frequency: Random.range(600, 800),
-				volume: 0.3,
+				volume: momentum / (width * height / 16),
 				wave: "sine",
 				fadeOut: 100
 			});
@@ -809,8 +811,18 @@ class Element {
 
 	burn(x, y, fireType, burn = false) {
 		if (burn || Random.bool(this.flammability)) {
-			if (!this.onburn(x, y)) Element.setCell(x, y, fireType);
-			else {
+			if (Random.bool(0.05))
+				synth.play({
+					frequency: 20,
+					volume: Random.range(0.14, 0.3),
+					duration: Random.range(30, 45),
+					fadeOut: 300,
+					wave: "sawtooth"
+				});
+
+			if (!this.onburn(x, y)) { 
+				Element.setCell(x, y, fireType);
+			} else {
 				Element.affectNeighbors(x, y, (x, y) => {
 					if (Element.isType(x, y, fireType)) Element.setCell(x, y, TYPES.AIR);
 				});
@@ -3168,6 +3180,14 @@ const DATA = {
 		const cell = grid[x][y];
 
 		if (cell.acts === 0) {
+			if (Random.bool(0.01))
+				synth.play({
+					frequency: 35,
+					volume: 0.02,
+					duration: 150,
+					fadeOut: 40,
+					wave: "square"
+				});
 
 			let canConduct = false;
 			Element.affectNeighbors(x, y, (x, y) => {

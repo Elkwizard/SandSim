@@ -60,7 +60,7 @@ const TYPES = Object.fromEntries([
 	"RADIUM", "ACTINIUM", "THORIUM",
 	"LIGHTNING", "LIGHT", "LIGHT_SAD",
 	"BLOOD", "MUSCLE", "BONE", "EPIDERMIS", "INACTIVE_NEURON", "ACTIVE_NEURON", "CEREBRUM",
-	"CORAL", "DEAD_CORAL", "CORAL_STIMULANT", "CORAL_BRANCH", "CORAL_HUB"
+	"CORAL", "DEAD_CORAL", "CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER"
 ].map((n, i) => [n, i]));
 
 const ELEMENT_COUNT = Object.keys(TYPES).length;
@@ -1904,27 +1904,35 @@ const DATA = {
 
 	[TYPES.CORAL]: new Element(1, Color.ORANGE, .2, .1, (x, y) => {
 		Element.affectNeighbors(x, y, (ox, oy) => {
-			if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 200;
+			if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 100;
 			if (Element.isType(ox, oy, TYPES.CORAL) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = grid[ox][oy].acts--;
 		})
-		if (grid[x][y].acts == 0) Element.setCell(x, y, TYPES.DEAD_CORAL);
+		if (grid[x][y].acts <= 0) Element.setCell(x, y, TYPES.DEAD_CORAL);
 		if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.CORAL)) Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL);
-		grid[x][y].acts--;
+		grid[x][y].acts-=2;
 
 		Element.updateCell(x, y)
 	}),
 
 	[TYPES.DEAD_CORAL]: new Element(1, Color.GRAY, .2, .1),
 
-	[TYPES.CORAL_BRANCH]: new Element(1, Color.RAZZMATAZZ, .2, .1),
-
-	[TYPES.CORAL_HUB]: new Element(1, Color.MAGENTA, .2, .1, (x, y) => {
-
+	[TYPES.CORAL_STIMULANT]: new Element(1, Color.LIME, .2, .1, (x, y) => {
+		Element.affectNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.DEAD_CORAL) && (ox == x || oy == y)) Element.setCell(ox, oy, TYPES.CORAL)
+		})
+		solidUpdate(x, y)
 	}),
 
-	[TYPES.CORAL_STIMULANT]: new Element(1, Color.LIME, .2, .1, (x, y) => {
-		Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL)
-		solidUpdate(x, y)
+	[TYPES.CORAL_PRODUCER]: new Element(1, Color.RAZZMATAZZ, .2, .1, (x, y) => {
+		Element.affectNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.DEAD_CORAL)) Element.trySetCell(x, y + 1, TYPES.CORAL_STIMULANT);
+		})
+	}),
+
+	[TYPES.CORAL_CONSUMER]: new Element(1, Color.MAGENTA, .2, .1, (x, y) => {
+		Element.affectNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.CORAL) && Element.isType(x, y - 1, TYPES.CORAL_STIMULANT)) Element.setCell(x, y - 1, TYPES.AIR);
+		})
 	}),
 
 	[TYPES.ASH]: new Element(1, freqColoring([

@@ -1920,7 +1920,16 @@ const DATA = {
 		Element.affectNeighbors(x, y, (ox, oy) => {
 			if (Element.isType(ox, oy, TYPES.DEAD_CORAL) && (ox == x || oy == y)) Element.setCell(ox, oy, TYPES.CORAL)
 		})
-		solidUpdate(x, y)
+		solidUpdate(x, y, undefined, undefined, (x, y, fx, fy) => {
+			if (Element.tryMove(x, y, fx, fy))
+				synth.play({
+					duration: 10,
+					fadeOut: 20,
+					frequency: Random.range(500, 700),
+					volume: 0.5,
+					wave: "square"
+				});
+		});
 	}),
 
 	[TYPES.CORAL_PRODUCER]: new Element(1, Color.RAZZMATAZZ, .2, .1, (x, y) => {
@@ -4297,7 +4306,7 @@ function handleInput() {
 		paused = SETTINGS_SHOWN;
 	}
 
-	canvas.cursor = scene.main.getElementsWithScript(TYPE_SELECTOR).some(el => !el.hidden && el.collidePoint(mouse.screen)) ? "pointer" : "none";
+	canvas.cursor = scene.main.getElementsWithScript(TYPE_SELECTOR).some(el => !el.hidden && el.collidePoint(mouse.world)) ? "pointer" : "none";
 }
 
 function stepParticles() {

@@ -43,7 +43,7 @@ const TYPES = Object.fromEntries([
 	"EXOTHERMIA", "FIRE", "BLUE_FIRE",
 	"BAHHUM",
 	"ESTIUM", "ESTIUM_GAS",
-	"DDT", "ANT", "BEE", "HIVE", "HONEY", "SUGAR",
+	"DDT", "ANT", "DAMSELFLY", "BEE", "HIVE", "HONEY", "SUGAR",
 	"WATER", "ICE", "SNOW", "STAINED_SNOW", "SALT", "SALT_WATER",
 	"SAND", "KELP", "KELP_TOP", "PNEUMATOCYST",
 	"WOOD", "COAL", "OIL", "FUSE", "ASH",
@@ -3129,6 +3129,15 @@ const DATA = {
 		new Color("#e8d207"), new Color("#ffe812"),
 		new Color("#f5e764"), new Color("#e6d42c"),
 		new Color("#d1a81f"), new Color("#bd940d")
+	], 0.1, 0.05, (x, y) => chaosUpdate(x, y, LIQUID_PASS_THROUGH), (x, y) => {
+		makeCircle(x, y - 1, TYPES.HONEY, 2);
+		explode(x, y - 1, 2);
+	}),
+
+	[TYPES.DAMSELFLY]: new Element(2, [
+		new Color("#34eb95"), new Color("#1ac45e"),
+		new Color("#1fb3d1"), new Color("#28d1c6"),
+		new Color("#2ee885"), new Color("#24c4e0")
 	], 0.1, 0.05, (x, y) => boidUpdate(x, y, 2, 0.2, LIQUID_PASS_THROUGH), (x, y) => {
 		makeCircle(x, y - 1, TYPES.HONEY, 2);
 		explode(x, y - 1, 2);

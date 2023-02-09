@@ -2008,7 +2008,7 @@ const DATA = {
 		["#b34aed01", 1], ["#a743de01", 1], ["#993dcc01", 1], 
 	]), 0.2, 0.1, (x, y) => {
 		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
-			if (Element.isType(ox, oy, CORAL_ON) && Element.isType(x, y - 1, TYPES.CORAL_STIMULANT)) Element.setCell(x, y - 1, TYPES.AIR);
+			if (Element.isTypes(ox, oy, CORAL_ON) && Element.isType(x, y - 1, TYPES.CORAL_STIMULANT)) Element.setCell(x, y - 1, TYPES.AIR);
 		})
 	}),
 

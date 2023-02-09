@@ -185,7 +185,7 @@ class WorldSave {
 				for (let i = 0; i < duration; i++) {
 					const cell = save.grid[x][y];
 					cell.id = idMap[id];
-					cell.reference = reference;
+					cell.reference = idMap[reference];
 					cell.acts = acts;
 
 					y++;
@@ -811,15 +811,6 @@ class Element {
 
 	burn(x, y, fireType, burn = false) {
 		if (burn || Random.bool(this.flammability)) {
-			if (Random.bool(0.05))
-				synth.play({
-					frequency: 20,
-					volume: Random.range(0.14, 0.3),
-					duration: Random.range(30, 45),
-					fadeOut: 300,
-					wave: "sawtooth"
-				});
-
 			if (!this.onburn(x, y)) { 
 				Element.setCell(x, y, fireType);
 			} else {
@@ -1543,7 +1534,9 @@ const boidUpdate = (x, y, maxSpeed = 4, accuracy = 1, passthrough) => { // by va
 }
 
 
-const fireUpdate = (x, y, type, up = true) => {
+const fireUpdate = (x, y, type, up = true) => {	
+	soundEffects.fireSound.frequency++;
+
 	let neighbors = 0;
 	let burned = 0;
 	let oxygen = 0;
@@ -1916,7 +1909,7 @@ const DATA = {
 
 	[TYPES.DEAD_CORAL]: new Element(1, Color.GRAY, .2, .1),
 
-	[TYPES.CORAL_STIMULANT]: new Element(1, Color.LIME, .2, .1, (x, y) => {
+	[TYPES.CORAL_STIMULANT]: new Element(50, Color.LIME, .2, .1, (x, y) => {
 		Element.affectNeighbors(x, y, (ox, oy) => {
 			if (Element.isType(ox, oy, TYPES.DEAD_CORAL) && (ox == x || oy == y)) Element.setCell(ox, oy, TYPES.CORAL)
 		})
@@ -4561,8 +4554,59 @@ function extractDynamicBodies() {
 		dyn[i].scripts.DYNAMIC_OBJECT.extract();
 }
 
+class SoundEffectState {
+	static MAX_INSTANCES = 4;
+	constructor(sound, {
+		maxFrequency = 100,
+		volume = 1
+	}) {
+		this.sound = loadResource(sound + ".mp3");
+		this.frequency = 0;
+		this.instances = [];
+		this.lastDensity = 0;
+		this.maxFrequency = maxFrequency;
+		this.volume = volume;
+	}
+	update() {
+		const density = Number.clamp(this.frequency / this.maxFrequency, 0, 1);
+		this.lastDensity += (density - this.lastDensity) * 0.1;
+		const instContinuous = Number.clamp(this.lastDensity - 0.01, 0, 1) * SoundEffectState.MAX_INSTANCES;
+		const instCount = Math.ceil(instContinuous);
+		const lastInstVolume = instContinuous % 1;
+
+		while (this.instances.length > instCount)
+			this.instances.pop().stop();
+		this.instances.length = instCount;
+		for (let i = 0; i < instCount; i++) {
+			const volume = this.volume * ((i === instCount - 1) ? lastInstVolume : 1);
+			if (!this.instances[i] || this.instances[i].isDone)
+				this.instances[i] = this.sound.play(volume);
+			else this.instances[i].volume = volume;
+		}
+	}
+};
+
+const soundEffects = Object.fromEntries(Object.entries(SOUND_EFFECTS)
+	.map(([sound, props]) => [sound, new SoundEffectState(sound, props)]
+));
+
+function clearSoundEffectDensity() {
+	const keys = Object.keys(SOUND_EFFECTS);
+	for (let i = 0; i < keys.length; i++)
+		soundEffects[keys[i]].frequency = 0;
+}
+
+function updateSoundEffects() {
+	const keys = Object.keys(SOUND_EFFECTS);
+	for (let i = 0; i < keys.length; i++) {
+		soundEffects[keys[i]].update();
+	}
+}
+
 intervals.continuous(time => {
 	// try {
+
+		clearSoundEffectDensity();
 		
 		handleInput();
 		injectDynamicBodies();
@@ -4585,6 +4629,8 @@ intervals.continuous(time => {
 		displayWorld();
 		displayBrushPreview();
 		displayDebugInfo();
+
+		updateSoundEffects();
 
 
 		if (!SELECTORS_SHOWN) {

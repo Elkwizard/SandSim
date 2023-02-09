@@ -5,12 +5,20 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<script src="https://elkwizard.github.io/Hengine/Package/Engine/Manage/HengineLoader.js"></script>
+	<script src="../Hengine/Hengine/Package/Engine/Manage/HengineLoader.js"></script>
+	<!-- <script src="https://elkwizard.github.io/Hengine/Package/Engine/Manage/HengineLoader.js"></script> -->
 </head>
 
 <body>
     <script>
+		const SOUND_EFFECTS = {
+			fireSound: {
+				maxFrequency: 2000,
+				volume: 0.8
+			}
+		};
         HengineLoader.load([
+			...Object.keys(SOUND_EFFECTS).map(sound => new HengineSoundResource(`sound%20effects/${sound}.mp3`)),
             new HengineScriptResource("SandSim.js")
         ]);
     </script>

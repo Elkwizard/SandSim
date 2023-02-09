@@ -60,7 +60,7 @@ const TYPES = Object.fromEntries([
 	"RADIUM", "ACTINIUM", "THORIUM",
 	"LIGHTNING", "LIGHT", "LIGHT_SAD",
 	"BLOOD", "MUSCLE", "BONE", "EPIDERMIS", "INACTIVE_NEURON", "ACTIVE_NEURON", "CEREBRUM",
-	"CORAL", "DEAD_CORAL", "CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER"
+	"CORAL", "DEAD_CORAL", "ELDER_CORAL", "PETRIFIED_CORAL", "CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER"
 ].map((n, i) => [n, i]));
 
 const ELEMENT_COUNT = Object.keys(TYPES).length;
@@ -921,15 +921,26 @@ class Element {
 		return x >= 0 && y >= 0 && x < WIDTH && y < HEIGHT;
 	}
 
-	static react(x, y, reactant, product, chance = 1) {
+	static react(x, y, reactant, product, chance = 1, cardinal = false) {
 		let reacted = false;
-		Element.affectAllNeighbors(x, y, (ox, oy) => {
-			if (Element.isType(ox, oy, reactant) && Random.bool(chance)) {
-				Element.setCell(ox, oy, product);
-				reacted = true;
-			}
-		});
-		return reacted;
+		if(cardinal){
+			Element.affectCardinalNeighbors(x, y, (ox, oy) => {
+				if (Element.isType(ox, oy, reactant) && Random.bool(chance)) {
+					Element.setCell(ox, oy, product);
+					reacted = true;
+				}
+			});
+			return reacted;
+		}
+		else {
+			Element.affectAllNeighbors(x, y, (ox, oy) => {
+				if (Element.isType(ox, oy, reactant) && Random.bool(chance)) {
+					Element.setCell(ox, oy, product);
+					reacted = true;
+				}
+			});
+			return reacted;
+		}
 	}
 
 	static consumeReact(x, y, reactant, product, chance = 1) {
@@ -1006,6 +1017,15 @@ class Element {
 			const ox = x + i;
 			const oy = y + j;
 			if ((i || j) && Element.inBounds(ox, oy) && grid[ox][oy].id !== TYPES.AIR)
+				effect(ox, oy);
+		}
+	}
+
+	static affectCardinalNeighbors(x, y, effect) {
+		for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+			const ox = x + i;
+			const oy = y + j;
+			if ((ox == x || oy == y) && (i || j) && Element.inBounds(ox, oy) && grid[ox][oy].id !== TYPES.AIR)
 				effect(ox, oy);
 		}
 	}
@@ -1276,6 +1296,8 @@ const BRAIN = new Set([...NEURON, TYPES.CEREBRUM])
 const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD, TYPES.BONE])
 const THICKETS = new Set([TYPES.THICKET, TYPES.INCENSE, TYPES.THICKET_BUD, TYPES.THICKET_SEED, TYPES.INCENSE_SMOKE, TYPES.THICKET_STEM]);
 const ACID_IMMUNE = new Set([TYPES.ACID, TYPES.GLASS]);
+const CORAL_ON = new Set([TYPES.CORAL, TYPES.ELDER_CORAL])
+const CORAL_OFF = new Set([TYPES.DEAD_CORAL, TYPES.PETRIFIED_CORAL])
 
 function updatePixel(x, y) {
 	tex.setPixel(x, y, DATA[grid[x][y].id].getColor(x, y));
@@ -1902,23 +1924,65 @@ const DATA = {
 		}
 	}),
 
-	[TYPES.CORAL]: new Element(1, Color.ORANGE, .2, .1, (x, y) => {
-		Element.affectNeighbors(x, y, (ox, oy) => {
-			if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 100;
-			if (Element.isType(ox, oy, TYPES.CORAL) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = grid[ox][oy].acts--;
+	[TYPES.CORAL]: new Element(1, (x, y) => {	
+		const p = Random.octave(3, Random.perlin2D, x, y, .1);
+		c = Random.choice(freqColoring([["#ff7f5004", 2], ["#f5673304", 1], ["#f5916904", 1],]));
+		if (p > .5 && p < .56 && Random.bool(.85)) c = new Color(Random.bool() ? "#f0978104" : "#eb876e04");
+
+		return c;
+	}, 0.2, 0.1, (x, y) => {
+		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 120;
+			if (Element.isTypes(ox, oy, CORAL_ON) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = Math.min(100, grid[ox][oy].acts--);
 		})
 		if (grid[x][y].acts <= 0) Element.setCell(x, y, TYPES.DEAD_CORAL);
-		if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.CORAL)) Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL);
+		if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.CORAL)){
+			Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL, 1, true);
+			Element.react(x, y, TYPES.PETRIFIED_CORAL, TYPES.ELDER_CORAL, .5, true);
+		}
 		grid[x][y].acts-=2;
 
 		Element.updateCell(x, y)
 	}),
 
-	[TYPES.DEAD_CORAL]: new Element(1, Color.GRAY, .2, .1),
+	[TYPES.DEAD_CORAL]: new Element(1, (x, y) => {
+		const p = Random.octave(4, Random.perlin2D, x, y, .05);
+		c = Random.choice(freqColoring([["#a1948f01", 1], ["#948a8701", 2], ["#87817f01", 1]]));
+		if (p > .5 && p < .52 && Random.bool(.35)) c = new Color("#afa09701");
+		return c;
+	}, 0.21, 0.1),
 
-	[TYPES.CORAL_STIMULANT]: new Element(1, Color.LIME, .2, .1, (x, y) => {
-		Element.affectNeighbors(x, y, (ox, oy) => {
-			if (Element.isType(ox, oy, TYPES.DEAD_CORAL) && (ox == x || oy == y)) Element.setCell(ox, oy, TYPES.CORAL)
+	 [TYPES.ELDER_CORAL]: new Element(1, (x, y) => {	
+		c = Random.choice(freqColoring([["#f5673302", 1], ["#fa7e4d02", 1], ["#f5916902", 1],]));
+		return Color.lerp(c, new Color("#00000001"), .5);
+	}, 0.4, 0.04, (x, y) => {
+		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 400;
+			if (Element.isTypes(ox, oy, CORAL_ON) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = grid[ox][oy].acts--;
+		})
+		if (grid[x][y].acts <= 0) Element.setCell(x, y, TYPES.PETRIFIED_CORAL);
+		if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.ELDER_CORAL)){
+			Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL, .5, true);
+			Element.react(x, y, TYPES.PETRIFIED_CORAL, TYPES.ELDER_CORAL, 1, true);
+		}
+		grid[x][y].acts-=2;
+
+		Element.updateCell(x, y)
+	}),
+
+	[TYPES.PETRIFIED_CORAL]: new Element(1, (x, y) => {
+		const p = Random.octave(4, Random.perlin2D, x, y, .05);
+		c = Random.choice(freqColoring([["#a1948f01", 1], ["#948a8701", 2], ["#87817f01", 1]]));
+		if (p > .5 && p < .52 && Random.bool(.35)) c = new Color("#afa09701");
+		return Color.lerp(c, new Color("#00000001"), .6);
+	}, 0.45, 0.01),
+
+	[TYPES.CORAL_STIMULANT]: new Element(1, freqColoring([
+		["#0be37e01", 2], ["#08cf7201", 1], ["#05fa8801", 2], 
+	]), 0.2, 0.1, (x, y) => {
+		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.DEAD_CORAL)) Element.setCell(ox, oy, TYPES.CORAL)
+			if (Element.isType(ox, oy, TYPES.PETRIFIED_CORAL)) Element.setCell(ox, oy, TYPES.ELDER_CORAL)
 		})
 		solidUpdate(x, y, undefined, undefined, (x, y, fx, fy) => {
 			if (Element.tryMove(x, y, fx, fy))
@@ -1932,15 +1996,19 @@ const DATA = {
 		});
 	}),
 
-	[TYPES.CORAL_PRODUCER]: new Element(1, Color.RAZZMATAZZ, .2, .1, (x, y) => {
-		Element.affectNeighbors(x, y, (ox, oy) => {
-			if (Element.isType(ox, oy, TYPES.DEAD_CORAL)) Element.trySetCell(x, y + 1, TYPES.CORAL_STIMULANT);
+	[TYPES.CORAL_PRODUCER]: new Element(1, freqColoring([
+		["#f02b7301", 1], ["#ed347801", 1], ["#fc388001", 1], 
+	]), 0.2, 0.1, (x, y) => {
+		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
+			if (Element.isTypes(ox, oy, CORAL_OFF)) Element.trySetCell(x, y + 1, TYPES.CORAL_STIMULANT);
 		})
 	}),
 
-	[TYPES.CORAL_CONSUMER]: new Element(1, Color.MAGENTA, .2, .1, (x, y) => {
-		Element.affectNeighbors(x, y, (ox, oy) => {
-			if (Element.isType(ox, oy, TYPES.CORAL) && Element.isType(x, y - 1, TYPES.CORAL_STIMULANT)) Element.setCell(x, y - 1, TYPES.AIR);
+	[TYPES.CORAL_CONSUMER]: new Element(1, freqColoring([
+		["#b34aed01", 1], ["#a743de01", 1], ["#993dcc01", 1], 
+	]), 0.2, 0.1, (x, y) => {
+		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
+			if (Element.isTypes(ox, oy, TYPES.CORAL_ON) && Element.isType(x, y - 1, TYPES.CORAL_STIMULANT)) Element.setCell(x, y - 1, TYPES.AIR);
 		})
 	}),
 
@@ -3139,7 +3207,7 @@ const DATA = {
 		new Color("#1fb3d1"), new Color("#28d1c6"),
 		new Color("#2ee885"), new Color("#24c4e0")
 	], 0.1, 0.05, (x, y) => boidUpdate(x, y, 2, 0.2, LIQUID_PASS_THROUGH), (x, y) => {
-		makeCircle(x, y - 1, TYPES.HONEY, 2);
+		makeCircle(x, y - 1, TYPES.BLOOD, 2);
 		explode(x, y - 1, 2);
 	}),
 

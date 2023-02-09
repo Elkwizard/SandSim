@@ -60,7 +60,7 @@ const TYPES = Object.fromEntries([
 	"RADIUM", "ACTINIUM", "THORIUM",
 	"LIGHTNING", "LIGHT", "LIGHT_SAD",
 	"BLOOD", "MUSCLE", "BONE", "EPIDERMIS", "INACTIVE_NEURON", "ACTIVE_NEURON", "CEREBRUM",
-	"CORAL", "DEAD_CORAL", "ELDER_CORAL", "PETRIFIED_CORAL", "CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER"
+	"CORAL", "DEAD_CORAL", "ELDER_CORAL", "PETRIFIED_CORAL", "CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER", 
 ].map((n, i) => [n, i]));
 
 const ELEMENT_COUNT = Object.keys(TYPES).length;
@@ -2008,7 +2008,7 @@ const DATA = {
 		["#b34aed01", 1], ["#a743de01", 1], ["#993dcc01", 1], 
 	]), 0.2, 0.1, (x, y) => {
 		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
-			if (Element.isTypes(ox, oy, TYPES.CORAL_ON) && Element.isType(x, y - 1, TYPES.CORAL_STIMULANT)) Element.setCell(x, y - 1, TYPES.AIR);
+			if (Element.isType(ox, oy, CORAL_ON) && Element.isType(x, y - 1, TYPES.CORAL_STIMULANT)) Element.setCell(x, y - 1, TYPES.AIR);
 		})
 	}),
 

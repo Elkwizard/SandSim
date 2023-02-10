@@ -1701,6 +1701,8 @@ function explodeLine(x, y, x1, y1, vel, passthrough) {
 function explode(ox, oy, r = 10, vel = 0.2, passthrough = EXPLOSION_PASSTHROUGH) {
 	const c = Math.PI * 2 * r;
 
+	eventSoundEffects.explosionSound.frequency++;
+
 	const dyn = scene.main.getElementsWithScript(DYNAMIC_OBJECT);
 	for (let i = 0; i < dyn.length; i++)
 		dyn[i].scripts.DYNAMIC_OBJECT.explode(ox, oy, r, vel);
@@ -3270,7 +3272,7 @@ const DATA = {
 			if (Random.bool(0.01))
 				synth.play({
 					frequency: 35,
-					volume: 0.02,
+					volume: 0.1,
 					duration: 150,
 					fadeOut: 40,
 					wave: "square"
@@ -3582,6 +3584,16 @@ const DATA = {
 			if (Random.bool(0.1)) Element.die(x, y);
 			else Element.tryMove(x, y, ox, oy);
 		} else if (cell.acts === 0) {
+			if (Random.bool(1)) {
+				synth.play({
+					frequency: 50,
+					volume: 0.2,
+					duration: 50,
+					fadeOut: 100,
+					wave: "sawtooth"
+				});
+			}
+
 			cell.acts++;
 			const dx = Random.bool() ? -1 : 1;
 			const len = Random.int(5, 10);
@@ -4132,9 +4144,10 @@ function handleBrushInput() {
 		const { x: ox, y: oy } = Vector2.floor(world.over(CELL));
 		const { x: oxl, y: oyl } = Vector2.floor(mouse.worldLast.over(CELL));
 
-		if (brush === TYPES.PARTICLE)
+		if (brush === TYPES.PARTICLE) {
 			explode(ox, oy, r);
-		else if (brush === TYPES.ENDOTHERMIA)
+			eventSoundEffects.explosionSound.frequency--;
+		} else if (brush === TYPES.ENDOTHERMIA)
 			explode(ox, oy, r);
 		else {
 			const handleCell = (x, y) => {
@@ -4631,6 +4644,34 @@ function extractDynamicBodies() {
 		dyn[i].scripts.DYNAMIC_OBJECT.extract();
 }
 
+class EventSoundEffect {
+	constructor(src, {
+		chance = 1,
+		maxPerFrame = Infinity,
+		volume = 1
+	}) {
+		this.sound = loadResource(src + ".mp3");
+		this.chance = chance;
+		this.volume = volume;
+		this.frequency = 0;
+		this.maxPerFrame = maxPerFrame;
+		this.toPlay = 0;
+	}
+	update() {
+		this.toPlay += Math.min(this.maxPerFrame, this.frequency * this.chance);
+
+		const count = Math.floor(this.toPlay);
+		for (let i = 0; i < count; i++) {
+			this.sound.play(this.volume);
+			this.toPlay--;
+		}
+	}
+}
+
+const eventSoundEffects = Object.fromEntries(
+	Object.entries(EVENT_SOUND_EFFECTS).map(([sound, props]) => [sound, new EventSoundEffect(sound, props)])
+);
+
 class BlendedEffectInstance {
 	constructor(sound, volume) {
 		this.sound = sound;
@@ -4700,16 +4741,22 @@ const soundEffects = Object.fromEntries(Object.entries(SOUND_EFFECTS)
 ));
 
 function clearSoundEffectDensity() {
-	const keys = Object.keys(SOUND_EFFECTS);
-	for (let i = 0; i < keys.length; i++)
-		soundEffects[keys[i]].frequency = 0;
+	const soundEffectKeys = Object.keys(SOUND_EFFECTS);
+	for (let i = 0; i < soundEffectKeys.length; i++)
+		soundEffects[soundEffectKeys[i]].frequency = 0;
+	const eventKeys = Object.keys(EVENT_SOUND_EFFECTS);
+	for (let i = 0; i < eventKeys.length; i++)
+		eventSoundEffects[eventKeys[i]].frequency = 0;
+		
 }
 
 function updateSoundEffects() {
-	const keys = Object.keys(SOUND_EFFECTS);
-	for (let i = 0; i < keys.length; i++) {
-		soundEffects[keys[i]].update();
-	}
+	const soundEffectKeys = Object.keys(SOUND_EFFECTS);
+	for (let i = 0; i < soundEffectKeys.length; i++)
+		soundEffects[soundEffectKeys[i]].update();
+	const eventKeys = Object.keys(EVENT_SOUND_EFFECTS);
+	for (let i = 0; i < eventKeys.length; i++)
+		eventSoundEffects[eventKeys[i]].update();
 }
 
 intervals.continuous(time => {

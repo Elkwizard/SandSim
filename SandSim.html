@@ -17,9 +17,18 @@
 				volume: 0.8
 			}
 		};
+		const EVENT_SOUND_EFFECTS = {
+			explosionSound: {
+				chance: 0.03,
+				maxPerFrame: 0.8,
+				volume: 0.3
+			}
+		};
         HengineLoader.load([
+			...Object.keys(EVENT_SOUND_EFFECTS).map(sound => new HengineSoundResource(`sound%20effects/${sound}.mp3`)),
 			...Object.keys(SOUND_EFFECTS).map(sound => new HengineSoundResource(`sound%20effects/${sound}.mp3`)),
-            new HengineScriptResource("SandSim.js")
+            
+			new HengineScriptResource("SandSim.js")
         ]);
     </script>
 </body>

@@ -1343,7 +1343,7 @@ class Particle {
 	}
 	update() {
 		this.position.get(this.lastPosition);
-		
+
 		const { id } = grid[Math.floor(this.position.x)][Math.floor(this.position.y)];
 
 		if (id === TYPES.AIR) {
@@ -4631,6 +4631,36 @@ function extractDynamicBodies() {
 		dyn[i].scripts.DYNAMIC_OBJECT.extract();
 }
 
+class BlendedEffectInstance {
+	constructor(sound, volume) {
+		this.sound = sound;
+		this.instances = [sound.play(volume)];
+		this.volume = volume;
+	}
+	update() {
+		for (let i = 0; i < this.instances.length; i++)
+			if (this.instances[i].isDone)
+				this.instances[i] = this.sound.play(this.volume);
+
+		if (this.instances.length === 1 && this.instances[0].time > this.sound.duration * 0.5) {
+			this.instances.push(this.sound.play(this.volume / 2));
+			this.instances[0].volume = this.volume / 2;
+		}
+	}
+	stop() {
+		for (let i = 0; i < this.instances.length; i++)
+			this.instances[i].stop();
+	}
+	set volume(v) {
+		this._volume = v;
+		for (let i = 0; i < this.instances.length; i++)
+			this.instances[i].volume = v / this.instances.length;
+	}
+	get volume() {
+		return this._volume;
+	}
+}
+
 class SoundEffectState {
 	static MAX_INSTANCES = 4;
 	constructor(sound, {
@@ -4656,9 +4686,11 @@ class SoundEffectState {
 		this.instances.length = instCount;
 		for (let i = 0; i < instCount; i++) {
 			const volume = this.volume * ((i === instCount - 1) ? lastInstVolume : 1);
-			if (!this.instances[i] || this.instances[i].isDone)
-				this.instances[i] = this.sound.play(volume);
-			else this.instances[i].volume = volume;
+			if (this.instances[i])
+				this.instances[i].volume = volume;
+			else
+				this.instances[i] = new BlendedEffectInstance(this.sound, volume);
+			this.instances[i].update();
 		}
 	}
 };

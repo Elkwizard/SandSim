@@ -187,7 +187,7 @@ class WorldSave {
 				for (let i = 0; i < duration; i++) {
 					const cell = save.grid[x][y];
 					cell.id = idMap[id];
-					cell.reference = reference;
+					cell.reference = idMap[reference];
 					cell.acts = acts;
 
 					y++;
@@ -813,14 +813,6 @@ class Element {
 
 	burn(x, y, fireType, burn = false) {
 		if (burn || Random.bool(this.flammability)) {
-			if (Random.bool(0.05))
-				synth.play({
-					frequency: 20,
-					volume: Random.range(0.14, 0.3),
-					duration: Random.range(30, 45),
-					fadeOut: 300,
-					wave: "sawtooth"
-				});
 
 			if (!this.onburn(x, y)) { 
 				Element.setCell(x, y, fireType);
@@ -1567,7 +1559,8 @@ const boidUpdate = (x, y, maxSpeed = 4, accuracy = 1, passthrough) => { // by va
 }
 
 
-const fireUpdate = (x, y, type, up = true) => {
+const fireUpdate = (x, y, type, up = true) => {	
+	soundEffects.fireSound.frequency++;
 	let neighbors = 0;
 	let burned = 0;
 	let oxygen = 0;
@@ -1709,6 +1702,8 @@ function explodeLine(x, y, x1, y1, vel, passthrough) {
 
 function explode(ox, oy, r = 10, vel = 0.2, passthrough = EXPLOSION_PASSTHROUGH) {
 	const c = Math.PI * 2 * r;
+
+	eventSoundEffects.explosionSound.frequency++;
 
 	const dyn = scene.main.getElementsWithScript(DYNAMIC_OBJECT);
 	for (let i = 0; i < dyn.length; i++)
@@ -3321,7 +3316,7 @@ const DATA = {
 			if (Random.bool(0.01))
 				synth.play({
 					frequency: 35,
-					volume: 0.02,
+					volume: 0.1,
 					duration: 150,
 					fadeOut: 40,
 					wave: "square"
@@ -3633,6 +3628,16 @@ const DATA = {
 			if (Random.bool(0.1)) Element.die(x, y);
 			else Element.tryMove(x, y, ox, oy);
 		} else if (cell.acts === 0) {
+			if (Random.bool(1)) {
+				synth.play({
+					frequency: 50,
+					volume: 0.2,
+					duration: 50,
+					fadeOut: 100,
+					wave: "sawtooth"
+				});
+			}
+
 			cell.acts++;
 			const dx = Random.bool() ? -1 : 1;
 			const len = Random.int(5, 10);
@@ -4183,8 +4188,10 @@ function handleBrushInput() {
 		const { x: ox, y: oy } = Vector2.floor(world.over(CELL));
 		const { x: oxl, y: oyl } = Vector2.floor(mouse.worldLast.over(CELL));
 
-		if (brush === TYPES.PARTICLE)
+		if (brush === TYPES.PARTICLE) {
 			explode(ox, oy, r);
+			eventSoundEffects.explosionSound.frequency--;
+		}
 		else if (brush === TYPES.ENDOTHERMIA)
 			explode(ox, oy, r);
 		else {
@@ -4682,9 +4689,125 @@ function extractDynamicBodies() {
 		dyn[i].scripts.DYNAMIC_OBJECT.extract();
 }
 
+class EventSoundEffect {
+	constructor(src, {
+		chance = 1,
+		maxPerFrame = Infinity,
+		volume = 1
+	}) {
+		this.sound = loadResource(src + ".mp3");
+		this.chance = chance;
+		this.volume = volume;
+		this.frequency = 0;
+		this.maxPerFrame = maxPerFrame;
+		this.toPlay = 0;
+	}
+	update() {
+		this.toPlay += Math.min(this.maxPerFrame, this.frequency * this.chance);
+
+		const count = Math.floor(this.toPlay);
+		for (let i = 0; i < count; i++) {
+			this.sound.play(this.volume);
+			this.toPlay--;
+		}
+	}
+}
+
+const eventSoundEffects = Object.fromEntries(
+	Object.entries(EVENT_SOUND_EFFECTS).map(([sound, props]) => [sound, new EventSoundEffect(sound, props)])
+);
+
+class BlendedEffectInstance {
+	constructor(sound, volume) {
+		this.sound = sound;
+		this.instances = [sound.play(volume)];
+		this.volume = volume;
+	}
+	update() {
+		for (let i = 0; i < this.instances.length; i++)
+			if (this.instances[i].isDone)
+				this.instances[i] = this.sound.play(this.volume);
+
+		if (this.instances.length === 1 && this.instances[0].time > this.sound.duration * 0.5) {
+			this.instances.push(this.sound.play(this.volume / 2));
+			this.instances[0].volume = this.volume / 2;
+		}
+	}
+	stop() {
+		for (let i = 0; i < this.instances.length; i++)
+			this.instances[i].stop();
+	}
+	set volume(v) {
+		this._volume = v;
+		for (let i = 0; i < this.instances.length; i++)
+			this.instances[i].volume = v / this.instances.length;
+	}
+	get volume() {
+		return this._volume;
+	}
+}
+
+class SoundEffectState {
+	static MAX_INSTANCES = 4;
+	constructor(sound, {
+		maxFrequency = 100,
+		volume = 1
+	}) {
+		this.sound = loadResource(sound + ".mp3");
+		this.frequency = 0;
+		this.instances = [];
+		this.lastDensity = 0;
+		this.maxFrequency = maxFrequency;
+		this.volume = volume;
+	}
+	update() {
+		const density = Number.clamp(this.frequency / this.maxFrequency, 0, 1);
+		this.lastDensity += (density - this.lastDensity) * 0.1;
+		const instContinuous = Number.clamp(this.lastDensity - 0.01, 0, 1) * SoundEffectState.MAX_INSTANCES;
+		const instCount = Math.ceil(instContinuous);
+		const lastInstVolume = instContinuous % 1;
+
+		while (this.instances.length > instCount)
+			this.instances.pop().stop();
+		this.instances.length = instCount;
+		for (let i = 0; i < instCount; i++) {
+			const volume = this.volume * ((i === instCount - 1) ? lastInstVolume : 1);
+			if (this.instances[i])
+				this.instances[i].volume = volume;
+			else
+				this.instances[i] = new BlendedEffectInstance(this.sound, volume);
+			this.instances[i].update();
+		}
+	}
+};
+
+const soundEffects = Object.fromEntries(Object.entries(SOUND_EFFECTS)
+	.map(([sound, props]) => [sound, new SoundEffectState(sound, props)]
+));
+
+function clearSoundEffectDensity() {
+	const soundEffectKeys = Object.keys(SOUND_EFFECTS);
+	for (let i = 0; i < soundEffectKeys.length; i++)
+		soundEffects[soundEffectKeys[i]].frequency = 0;
+	const eventKeys = Object.keys(EVENT_SOUND_EFFECTS);
+	for (let i = 0; i < eventKeys.length; i++)
+		eventSoundEffects[eventKeys[i]].frequency = 0;
+
+}
+
+function updateSoundEffects() {
+	const soundEffectKeys = Object.keys(SOUND_EFFECTS);
+	for (let i = 0; i < soundEffectKeys.length; i++)
+		soundEffects[soundEffectKeys[i]].update();
+	const eventKeys = Object.keys(EVENT_SOUND_EFFECTS);
+	for (let i = 0; i < eventKeys.length; i++)
+		eventSoundEffects[eventKeys[i]].update();
+}
+
 intervals.continuous(time => {
 	// try {
-		
+		clearSoundEffectDensity();
+
 		handleInput();
 		injectDynamicBodies();
 		handleBrushInput();
@@ -4707,6 +4830,7 @@ intervals.continuous(time => {
 		displayBrushPreview();
 		displayDebugInfo();
 
+		updateSoundEffects();
 
 		if (!SELECTORS_SHOWN) {
 			let hoveredElementType = TYPES.AIR;

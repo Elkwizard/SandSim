@@ -279,6 +279,7 @@ const grid = Array.dim(width / CELL, height / CELL)
 const WIDTH = grid.length;
 const HEIGHT = grid[0].length;
 
+
 class DYNAMIC_OBJECT extends ElementScript {
 	static RES = 2;
 	static SKIP = 20;
@@ -294,6 +295,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 		this.setGrid(grid, Vector2.origin);
 		this.slot = (DYNAMIC_OBJECT.nextSlot++) % DYNAMIC_OBJECT.DISTRIBUTION;
 		this.collidingObjects = new Map();
+		this.worryCells = new Set();
 	}
 	static computeCenterOfMass(grid) {
 		const centerOfMass = Vector2.origin;
@@ -426,7 +428,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 		]);
 		const skip = new Vector2(0, 0);
 		const vertex = new Vector2(0, 0);
-	
+
 		for (c.x = min.x; c.x <= max.x; c.x++) {
 			if (c.x > topCutoff) top = topEdgeRight;
 			if (c.x > bottomCutoff) bottom = bottomEdgeRight;
@@ -439,7 +441,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 				const lx = Math.floor(local.x);
 				const ly = Math.floor(local.y);
 				const cell = grid[lx]?.[ly];
-				if (cell?.id) fn(cell, c.x, c.y);
+				if (cell?.id) fn(cell, c.x, c.y, lx, ly);
 				else {
 					skip.x = Math.floor(lx / SKIP);
 					skip.y = Math.floor(ly / SKIP);
@@ -506,6 +508,10 @@ class DYNAMIC_OBJECT extends ElementScript {
 		this.forEachCell((cell, x, y) => {
 			if (grid[x][y].sameType(cell)) {
 				Element.die(x, y);
+				if (!this.colors.has(cell)) {
+					throw new Error("other one");
+					return;
+				}
 				tex.shaderSetPixel(x, y, this.colors.get(cell));
 			} else cell.id = TYPES.AIR;
 		});
@@ -536,6 +542,8 @@ class DYNAMIC_OBJECT extends ElementScript {
 			minY = Math.floor(minY);
 			maxX = Math.ceil(maxX) + 1;
 			maxY = Math.ceil(maxY) + 1;
+			const minCellX = minX * DYNAMIC_OBJECT.RES;
+			const minCellY = minY * DYNAMIC_OBJECT.RES;
 
 			const edges = shape.getEdges()
 				.filter(edge => edge.a.x !== edge.b.x);
@@ -548,7 +556,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 					.sort((a, b) => a - b);
 	
 				for (let n = 0; n < stops.length; n += 2) {
-					const startY = Math.floor(stops[n]) - 1;
+					const startY = Math.max(minY, Math.floor(stops[n]) - 1);
 					const endY = Math.ceil(stops[n + 1]);
 					for (let j = startY; j <= endY; j++) {
 						for (let ii = 0; ii < DYNAMIC_OBJECT.RES; ii++)
@@ -556,7 +564,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 							const x = i * DYNAMIC_OBJECT.RES + ii;
 							const y = j * DYNAMIC_OBJECT.RES + jj;
 							if (x >= 0 && y >= 0 && x < this.width && y < this.height) {
-								grid[x - minX * DYNAMIC_OBJECT.RES][y - minY * DYNAMIC_OBJECT.RES] = this.grid[x][y];
+								grid[x - minCellX][y - minCellY] = this.grid[x][y];
 								this.grid[x][y] = new Cell(TYPES.AIR);
 							}
 						}

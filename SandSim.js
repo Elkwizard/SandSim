@@ -279,6 +279,7 @@ const grid = Array.dim(width / CELL, height / CELL)
 const WIDTH = grid.length;
 const HEIGHT = grid[0].length;
 
+
 class DYNAMIC_OBJECT extends ElementScript {
 	static RES = 2;
 	static SKIP = 20;
@@ -294,6 +295,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 		this.setGrid(grid, Vector2.origin);
 		this.slot = (DYNAMIC_OBJECT.nextSlot++) % DYNAMIC_OBJECT.DISTRIBUTION;
 		this.collidingObjects = new Map();
+		this.worryCells = new Set();
 	}
 	static computeCenterOfMass(grid) {
 		const centerOfMass = Vector2.origin;
@@ -426,7 +428,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 		]);
 		const skip = new Vector2(0, 0);
 		const vertex = new Vector2(0, 0);
-	
+
 		for (c.x = min.x; c.x <= max.x; c.x++) {
 			if (c.x > topCutoff) top = topEdgeRight;
 			if (c.x > bottomCutoff) bottom = bottomEdgeRight;
@@ -439,7 +441,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 				const lx = Math.floor(local.x);
 				const ly = Math.floor(local.y);
 				const cell = grid[lx]?.[ly];
-				if (cell?.id) fn(cell, c.x, c.y);
+				if (cell?.id) fn(cell, c.x, c.y, lx, ly);
 				else {
 					skip.x = Math.floor(lx / SKIP);
 					skip.y = Math.floor(ly / SKIP);
@@ -506,6 +508,10 @@ class DYNAMIC_OBJECT extends ElementScript {
 		this.forEachCell((cell, x, y) => {
 			if (grid[x][y].sameType(cell)) {
 				Element.die(x, y);
+				if (!this.colors.has(cell)) {
+					throw new Error("other one");
+					return;
+				}
 				tex.shaderSetPixel(x, y, this.colors.get(cell));
 			} else cell.id = TYPES.AIR;
 		});
@@ -536,6 +542,8 @@ class DYNAMIC_OBJECT extends ElementScript {
 			minY = Math.floor(minY);
 			maxX = Math.ceil(maxX) + 1;
 			maxY = Math.ceil(maxY) + 1;
+			const minCellX = minX * DYNAMIC_OBJECT.RES;
+			const minCellY = minY * DYNAMIC_OBJECT.RES;
 
 			const edges = shape.getEdges()
 				.filter(edge => edge.a.x !== edge.b.x);
@@ -548,7 +556,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 					.sort((a, b) => a - b);
 	
 				for (let n = 0; n < stops.length; n += 2) {
-					const startY = Math.floor(stops[n]) - 1;
+					const startY = Math.max(minY, Math.floor(stops[n]) - 1);
 					const endY = Math.ceil(stops[n + 1]);
 					for (let j = startY; j <= endY; j++) {
 						for (let ii = 0; ii < DYNAMIC_OBJECT.RES; ii++)
@@ -556,7 +564,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 							const x = i * DYNAMIC_OBJECT.RES + ii;
 							const y = j * DYNAMIC_OBJECT.RES + jj;
 							if (x >= 0 && y >= 0 && x < this.width && y < this.height) {
-								grid[x - minX * DYNAMIC_OBJECT.RES][y - minY * DYNAMIC_OBJECT.RES] = this.grid[x][y];
+								grid[x - minCellX][y - minCellY] = this.grid[x][y];
 								this.grid[x][y] = new Cell(TYPES.AIR);
 							}
 						}
@@ -1833,9 +1841,6 @@ const DATA = {
 
 		}, (x, y) => {
 			Element.trySetCell(x, y - 1, Random.bool(.6) ? TYPES.BLOOD : Random.bool() ? TYPES.STEAM : TYPES.SMOKE);
-			// const fadeOut = 100;
-			// synth.play({ duration: 1000, volume: 1, frequency: 1000, wave: "sine", fadeOut });
-			// synth.play({ duration: 1000, volume: 1, frequency: 800, wave: "sine", fadeOut });
 		}),
 
 	[TYPES.INACTIVE_NEURON]: new Element(3, new Color("#1b1a47"), 0.4, 0.01, (x, y) => {
@@ -2009,16 +2014,10 @@ const DATA = {
 			if (Element.isType(ox, oy, TYPES.DEAD_COMPRESSED_CORAL)) Element.setCell(ox, oy, TYPES.COMPRESSED_CORAL)
 			if (Element.isType(ox, oy, TYPES.PETRIFIED_CORAL)) Element.setCell(ox, oy, TYPES.ELDER_CORAL)
 		})
-		solidUpdate(x, y)//, undefined, undefined, (x, y, fx, fy) => {
-		// 	if (Element.tryMove(x, y, fx, fy))
-		// 		synth.play({
-		// 			duration: 10,
-		// 			fadeOut: 20,
-		// 			frequency: Random.range(500, 700),
-		// 			volume: 0.5,
-		// 			wave: "square"
-		// 		});
-		// });
+		solidUpdate(x, y, undefined, undefined, (x, y, fx, fy) => {
+			if (Element.tryMove(x, y, fx, fy))
+				synthSoundEffects.coralStimulantSound.frequency++;
+		});
 	}),
 
 	[TYPES.CORAL_PRODUCER]: new Element(1, freqColoring([
@@ -2734,13 +2733,7 @@ const DATA = {
 	}, 0.1, 0.3, (x, y) => {
 		if ((Random.bool(Math.max(Random.perlin2D(x, y, .03), 0.01)))) {
 			if (Element.react(x, y, TYPES.AIR, TYPES.BAHHUM)) {
-				if (Random.bool(0.005)) synth.play({
-					duration: 10,
-					frequency: Random.range(300, 500),
-					volume: 1,
-					wave: "sine",
-					fadeOut: 10
-				});
+				synthSoundEffects.bahhumSound.frequency++;
 			}
 		} else if (Element.isType(x, y - 1, TYPES.AIR) || Element.isType(x, y + 1, TYPES.AIR) || Element.isType(x - 1, y, TYPES.AIR) || Element.isType(x + 1, y, TYPES.AIR)) Element.updateCell(x, y);
 
@@ -3292,13 +3285,7 @@ const DATA = {
 				const bool = Random.bool(.0004);
 				if (!isStone || (isStone && bool)) {
 					Element.setCell(x, y, TYPES.AIR);
-					if (Random.bool(0.05)) synth.play({
-						duration: 10,
-						frequency: Random.range(200, 300),
-						fadeOut: 1000,
-						wave: "sine",
-						volume: 1
-					})
+					synthSoundEffects.acidSound.frequency++;
 					cell.acts++;
 				}
 				if (isStone && !bool)
@@ -3317,14 +3304,7 @@ const DATA = {
 		const cell = grid[x][y];
 
 		if (cell.acts === 0) {
-			if (Random.bool(0.01))
-				synth.play({
-					frequency: 35,
-					volume: 0.1,
-					duration: 150,
-					fadeOut: 40,
-					wave: "square"
-				});
+			synthSoundEffects.electricitySound.frequency++;
 
 			let canConduct = false;
 			Element.affectNeighbors(x, y, (x, y) => {
@@ -3632,15 +3612,7 @@ const DATA = {
 			if (Random.bool(0.1)) Element.die(x, y);
 			else Element.tryMove(x, y, ox, oy);
 		} else if (cell.acts === 0) {
-			if (Random.bool(1)) {
-				synth.play({
-					frequency: 50,
-					volume: 0.2,
-					duration: 50,
-					fadeOut: 100,
-					wave: "sawtooth"
-				});
-			}
+			synthSoundEffects.lightningSound.frequency++;
 
 			cell.acts++;
 			const dx = Random.bool() ? -1 : 1;
@@ -4693,6 +4665,38 @@ function extractDynamicBodies() {
 		dyn[i].scripts.DYNAMIC_OBJECT.extract();
 }
 
+class SynthSoundEffect {
+	constructor({
+		maxPerFrame = Infinity,
+		chance = 1,
+		...props
+	}) {
+		this.chance = chance;
+		this.props = props,
+		this.maxPerFrame = maxPerFrame;
+		this.frequency = 0;
+		this.toPlay = 0;
+	}
+	update() {
+		this.toPlay += Math.min(this.maxPerFrame, this.frequency * this.chance);
+		
+		const count = Math.floor(this.toPlay);
+		for (let i = 0; i < count; i++) {
+			const props = {};
+			for (const key in this.props) {
+				const prop = this.props[key];
+				props[key] = typeof prop === "function" ? prop() : prop;
+			} 
+			synth.play(props);
+			this.toPlay--;
+		}
+	}
+}
+
+const synthSoundEffects = Object.fromEntries(Object.entries(SYNTH_SOUND_EFFECTS).map(
+	([sound, props]) => [sound, new SynthSoundEffect(props)]
+));
+
 class EventSoundEffect {
 	constructor(src, {
 		chance = 1,
@@ -4789,23 +4793,24 @@ const soundEffects = Object.fromEntries(Object.entries(SOUND_EFFECTS)
 	.map(([sound, props]) => [sound, new SoundEffectState(sound, props)]
 ));
 
-function clearSoundEffectDensity() {
-	const soundEffectKeys = Object.keys(SOUND_EFFECTS);
-	for (let i = 0; i < soundEffectKeys.length; i++)
-		soundEffects[soundEffectKeys[i]].frequency = 0;
-	const eventKeys = Object.keys(EVENT_SOUND_EFFECTS);
-	for (let i = 0; i < eventKeys.length; i++)
-		eventSoundEffects[eventKeys[i]].frequency = 0;
+const allSoundEffects = [soundEffects, eventSoundEffects, synthSoundEffects];
 
+function clearSoundEffectDensity() {
+	for (let i = 0; i < allSoundEffects.length; i++) {
+		const effect = allSoundEffects[i];
+		const keys = Object.keys(effect);
+		for (let i = 0; i < keys.length; i++)
+			effect[keys[i]].frequency = 0;
+	}
 }
 
 function updateSoundEffects() {
-	const soundEffectKeys = Object.keys(SOUND_EFFECTS);
-	for (let i = 0; i < soundEffectKeys.length; i++)
-		soundEffects[soundEffectKeys[i]].update();
-	const eventKeys = Object.keys(EVENT_SOUND_EFFECTS);
-	for (let i = 0; i < eventKeys.length; i++)
-		eventSoundEffects[eventKeys[i]].update();
+	for (let i = 0; i < allSoundEffects.length; i++) {
+		const effect = allSoundEffects[i];
+		const keys = Object.keys(effect);
+		for (let i = 0; i < keys.length; i++)
+			effect[keys[i]].update();
+	}
 }
 
 intervals.continuous(time => {

@@ -32,6 +32,53 @@
 				volume: 0.3
 			}
 		};
+		const SYNTH_SOUND_EFFECTS = {
+			lightningSound: {
+				chance: 1,
+				maxPerFrame: 2,
+				frequency: 50,
+				volume: 0.3,
+				duration: 50,
+				fadeOut: 100,
+				wave: "sawtooth"
+			},
+			bahhumSound: {
+				chance: 0.005,
+				maxPerFrame: 5,
+				duration: 10,
+				frequency: () => Random.range(300, 500),
+				volume: 1,
+				wave: "sine",
+				fadeOut: 10
+			},
+			electricitySound: {
+				chance: 0.01,
+				maxPerFrame: 5,
+				frequency: 35,
+				volume: 0.05,
+				duration: 150,
+				fadeOut: 40,
+				wave: "square"
+			},
+			acidSound: {
+				chance: 0.05,
+				maxPerFrame: 3,
+				duration: 10,
+				frequency: () => Random.range(200, 300),
+				fadeOut: 1000,
+				wave: "sine",
+				volume: 1
+			},
+			coralStimulantSound: {
+				chance: 1,
+				maxPerFrame: 10,
+				duration: 10,
+				fadeOut: 20,
+				frequency: () => Random.range(500, 700),
+				volume: 0.5,
+				wave: "square"
+			}
+		};
         HengineLoader.load([
 			...Object.keys(EVENT_SOUND_EFFECTS).map(sound => new HengineSoundResource(`sound%20effects/${sound}.mp3`)),
 			...Object.keys(SOUND_EFFECTS).map(sound => new HengineSoundResource(`sound%20effects/${sound}.mp3`)),

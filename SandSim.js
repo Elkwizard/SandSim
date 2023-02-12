@@ -752,7 +752,7 @@ const CHUNK = 16;
 const chunks = Array.dim(WIDTH / CHUNK, HEIGHT / CHUNK)
 	.map((_, x, y) => new Chunk(x, y));
 
-//try{chunks[1] += (new Chunk(20, 20))}catch(e){alert(e)}
+// here! alert(chunks[1][14])
 
 const CHUNK_WIDTH = chunks.length;
 const CHUNK_HEIGHT = chunks[0].length;
@@ -2009,16 +2009,16 @@ const DATA = {
 			if (Element.isType(ox, oy, TYPES.DEAD_COMPRESSED_CORAL)) Element.setCell(ox, oy, TYPES.COMPRESSED_CORAL)
 			if (Element.isType(ox, oy, TYPES.PETRIFIED_CORAL)) Element.setCell(ox, oy, TYPES.ELDER_CORAL)
 		})
-		solidUpdate(x, y, undefined, undefined, (x, y, fx, fy) => {
-			if (Element.tryMove(x, y, fx, fy))
-				synth.play({
-					duration: 10,
-					fadeOut: 20,
-					frequency: Random.range(500, 700),
-					volume: 0.5,
-					wave: "square"
-				});
-		});
+		solidUpdate(x, y)//, undefined, undefined, (x, y, fx, fy) => {
+		// 	if (Element.tryMove(x, y, fx, fy))
+		// 		synth.play({
+		// 			duration: 10,
+		// 			fadeOut: 20,
+		// 			frequency: Random.range(500, 700),
+		// 			volume: 0.5,
+		// 			wave: "square"
+		// 		});
+		// });
 	}),
 
 	[TYPES.CORAL_PRODUCER]: new Element(1, freqColoring([
@@ -3016,6 +3016,7 @@ const DATA = {
 		if (Element.isType(x, y - 1, TYPES.AIR)) {
 			if (Element.isType(x + shift, y - 1, TYPES.AIR) && Element.inBounds(x + shift, y - 1)) {
 				if (Random.bool(.001)) {
+					soundEffects.eurm.frequency++;
 					Element.setCell(x + shift, y - 1, TYPES.GRASS);
 				}
 				else if (Random.bool(.0001)) {
@@ -3236,7 +3237,10 @@ const DATA = {
 		new Color("#e8d207"), new Color("#ffe812"),
 		new Color("#f5e764"), new Color("#e6d42c"),
 		new Color("#d1a81f"), new Color("#bd940d")
-	], 0.1, 0.05, (x, y) => chaosUpdate(x, y, LIQUID_PASS_THROUGH), (x, y) => {
+	], 0.1, 0.05, (x, y) => {
+		chaosUpdate(x, y, LIQUID_PASS_THROUGH);
+		soundEffects.mmmm.frequency++;
+	}, (x, y) => {
 		makeCircle(x, y - 1, TYPES.HONEY, 2);
 		explode(x, y - 1, 2);
 	}),

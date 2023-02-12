@@ -743,7 +743,7 @@ const CHUNK = 16;
 const chunks = Array.dim(WIDTH / CHUNK, HEIGHT / CHUNK)
 	.map((_, x, y) => new Chunk(x, y));
 
-//try{chunks[1] += (new Chunk(20, 20))}catch(e){alert(e)}
+// here! alert(chunks[1][14])
 
 const CHUNK_WIDTH = chunks.length;
 const CHUNK_HEIGHT = chunks[0].length;
@@ -2996,6 +2996,7 @@ const DATA = {
 		if (Element.isType(x, y - 1, TYPES.AIR)) {
 			if (Element.isType(x + shift, y - 1, TYPES.AIR) && Element.inBounds(x + shift, y - 1)) {
 				if (Random.bool(.001)) {
+					soundEffects.eurm.frequency++;
 					Element.setCell(x + shift, y - 1, TYPES.GRASS);
 				}
 				else if (Random.bool(.0001)) {
@@ -3216,7 +3217,10 @@ const DATA = {
 		new Color("#e8d207"), new Color("#ffe812"),
 		new Color("#f5e764"), new Color("#e6d42c"),
 		new Color("#d1a81f"), new Color("#bd940d")
-	], 0.1, 0.05, (x, y) => chaosUpdate(x, y, LIQUID_PASSTHROUGH), (x, y) => {
+	], 0.1, 0.05, (x, y) => {
+		chaosUpdate(x, y, LIQUID_PASSTHROUGH);
+		soundEffects.mmmm.frequency++;
+	}, (x, y) => {
 		Element.die(x, y);
 		makeCircle(x, y, TYPES.HONEY, 2);
 		explode(x, y, 2);

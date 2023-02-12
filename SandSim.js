@@ -2524,7 +2524,7 @@ const DATA = {
 
 				intervals.delay(() => {
 					eventSoundEffects.thunderSound.frequency++;
-				}, 80);
+				}, Random.range(60, 100));
 				return;
 			}
 		};

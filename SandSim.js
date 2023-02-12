@@ -3218,8 +3218,8 @@ const DATA = {
 		new Color("#f5e764"), new Color("#e6d42c"),
 		new Color("#d1a81f"), new Color("#bd940d")
 	], 0.1, 0.05, (x, y) => {
-		chaosUpdate(x, y, LIQUID_PASSTHROUGH);
-		soundEffects.mmmm.frequency++;
+		if (chaosUpdate(x, y, LIQUID_PASSTHROUGH))
+			soundEffects.mmmm.frequency++;
 	}, (x, y) => {
 		Element.die(x, y);
 		makeCircle(x, y, TYPES.HONEY, 2);

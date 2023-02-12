@@ -1430,9 +1430,11 @@ const fluidUpdate = (x, y, direction, accel, passthrough) => {
 
 	let fell = false;
 	let horiz = false;
+	let moved = false;
 
 	if (Element.tryMove(x, y, x, y + dy, passthrough)) {
 		fell = true;
+		moved = true;
 	} else {
 		if (vel.y > 5) {
 			vel.rotate(Random.angle()).div(2);
@@ -1449,9 +1451,12 @@ const fluidUpdate = (x, y, direction, accel, passthrough) => {
 			if (Element.tryMove(x, y, x + d, y + dy, passthrough)) {
 				fell = true;
 				horiz = true;
+				moved = true;
 			} else {
-				if (Element.tryMove(x, y, x + d, y, passthrough)) horiz = true;
-				else {
+				if (Element.tryMove(x, y, x + d, y, passthrough)) {
+					horiz = true;
+					moved = true;
+				} else {
 					vel.mul(0);
 					continue;
 				}
@@ -1464,6 +1469,8 @@ const fluidUpdate = (x, y, direction, accel, passthrough) => {
 		vel.x *= 0.8;
 		if (horiz) vel.y *= 0.8;
 	} else vel.y = 0;
+
+	return moved;
 };
 
 function chaosUpdate(x, y, passthrough) {
@@ -1591,12 +1598,14 @@ const lavaUpdate = (x, y, type) => {
 	});
 };
 
-const liquidUpdate = (x, y) => {
-	fluidUpdate(x, y, 1, GRAVITY, LIQUID_PASSTHROUGH);
+const liquidUpdate = (x, y, passthrough = LIQUID_PASSTHROUGH) => {
+	if (fluidUpdate(x, y, 1, GRAVITY, passthrough)) {
+		soundEffects.liquidSound.frequency++;
+	}
 };
 
-const gasUpdate = (x, y) => {
-	fluidUpdate(x, y, -1, 0, GAS_PASSTHROUGH);
+const gasUpdate = (x, y, passthrough = GAS_PASSTHROUGH) => {
+	fluidUpdate(x, y, -1, 0, passthrough);
 };
 
 const solidUpdate = (x, y, g = GRAVITY, dxShiftChance = 0, tryMove = Element.tryMove) => {
@@ -1785,7 +1794,7 @@ const DATA = {
 		["#5c0404", 15],
 		["#590404", 12]
 	]), 0.4, 0.01, (x, y) => {
-		fluidUpdate(x, y, 1, GRAVITY, WATER_PASSTHROUGH);
+		liquidUpdate(x, y, WATER_PASSTHROUGH);
 	}, (x, y) => {
 		Element.setCell(x, y, Random.bool(.05) ? TYPES.ASH : Random.bool(.05) ? TYPES.STEAM : TYPES.SMOKE);
 		if (Random.bool(.25)) Element.trySetCell(x, y - 1, TYPES.RUST);
@@ -2496,6 +2505,7 @@ const DATA = {
 		{ // rain
 			if (Random.bool(0.0004)) {
 				Element.setCell(x, y, TYPES.WATER);
+				soundEffects.rainSound.frequency++;
 				return;
 			}
 		};
@@ -2511,6 +2521,10 @@ const DATA = {
 			if (Random.bool(CLOUD_STRICTNESS)) grid[x][y].acts--;
 			if (grid[x][y].acts > LIGHTNING_DELAY && Random.bool(0.000001)) {
 				Element.setCell(x, y, TYPES.LIGHTNING);
+
+				intervals.delay(() => {
+					eventSoundEffects.thunderSound.frequency++;
+				}, 80);
 				return;
 			}
 		};
@@ -3050,7 +3064,7 @@ const DATA = {
 		}
 	}),
 	[TYPES.WATER]: new Element(0, [new Color("#120a59"), new Color("#140960")], 0.4, 0.05, (x, y) => {
-		fluidUpdate(x, y, 1, GRAVITY, WATER_PASSTHROUGH);
+		liquidUpdate(x, y, WATER_PASSTHROUGH);
 	}, (x, y) => {
 		Element.setCell(x, y, TYPES.STEAM);
 		return true;
@@ -3059,7 +3073,7 @@ const DATA = {
 		["#06253d", 30],
 		["#042438", 30]
 	]), 0.42, 0.05, (x, y) => {
-		fluidUpdate(x, y, 1, GRAVITY, WATER_PASSTHROUGH);
+		liquidUpdate(x, y, WATER_PASSTHROUGH);
 		//if (Random.bool(.5)) {
 		const angle = Random.angle();
 		const cos = Math.cos(angle);
@@ -4733,6 +4747,8 @@ class SynthSoundEffect {
 			synth.play(props);
 			this.toPlay--;
 		}
+		
+		this.frequency = 0;
 	}
 }
 
@@ -4761,6 +4777,8 @@ class EventSoundEffect {
 			this.sound.play(this.volume);
 			this.toPlay--;
 		}
+		
+		this.frequency = 0;
 	}
 }
 
@@ -4829,6 +4847,8 @@ class SoundEffectState {
 				this.instances[i] = new BlendedEffectInstance(this.sound, volume);
 			this.instances[i].update();
 		}
+
+		this.frequency = 0;
 	}
 };
 
@@ -4837,15 +4857,6 @@ const soundEffects = Object.fromEntries(Object.entries(SOUND_EFFECTS)
 ));
 
 const allSoundEffects = [soundEffects, eventSoundEffects, synthSoundEffects];
-
-function clearSoundEffectDensity() {
-	for (let i = 0; i < allSoundEffects.length; i++) {
-		const effect = allSoundEffects[i];
-		const keys = Object.keys(effect);
-		for (let i = 0; i < keys.length; i++)
-			effect[keys[i]].frequency = 0;
-	}
-}
 
 function updateSoundEffects() {
 	for (let i = 0; i < allSoundEffects.length; i++) {
@@ -4858,7 +4869,6 @@ function updateSoundEffects() {
 
 intervals.continuous(time => {
 	// try {
-		clearSoundEffectDensity();
 
 		handleInput();
 		injectDynamicBodies();

@@ -238,7 +238,7 @@ class Cell {
 	constructor(id) {
 		this.id = id;
 		this.updated = false;
-		this.vel = new Vector2(0, 0);
+		this.vel = Vector2.origin;
 		// delete this.vel.x;
 		// delete this.vel.y;
 		// let _x = 0, _y = 0;
@@ -297,6 +297,8 @@ class DYNAMIC_OBJECT extends ElementScript {
 		this.slot = (DYNAMIC_OBJECT.nextSlot++) % DYNAMIC_OBJECT.DISTRIBUTION;
 		this.collidingObjects = new Map();
 		this.worryCells = new Set();
+		this.lastVelocity = Vector2.origin;
+		this.lastAngularVelocity = 0;
 	}
 	static computeCenterOfMass(grid) {
 		const centerOfMass = Vector2.origin;
@@ -316,8 +318,9 @@ class DYNAMIC_OBJECT extends ElementScript {
 
 			const mass = element => element.scripts.PHYSICS.mobile ? element.scripts.PHYSICS.mass : 0;
 			const contactVelocity = (element, contact) => {
-				const { velocity, angularVelocity } = element.scripts.PHYSICS;	
-				return velocity.plus(contact.minus(element.transform.position).normal.times(angularVelocity));
+				if (!element.scripts.DYNAMIC_OBJECT) return 0;
+				const { lastVelocity, lastAngularVelocity } = element.scripts.DYNAMIC_OBJECT;	
+				return lastVelocity.plus(contact.minus(element.transform.position).normal.times(lastAngularVelocity)).dot(direction);
 			};
 			const m0 = mass(obj);
 			const m1 = mass(element);
@@ -325,16 +328,24 @@ class DYNAMIC_OBJECT extends ElementScript {
 			let momentum = 0;
 			for (let i = 0; i < contacts.length; i++) {
 				const contact = contacts[i];
-				momentum += Math.abs(m0 * contactVelocity(obj, contact).dot(direction) - m1 * contactVelocity(element, contact).dot(direction));
+				momentum += Math.abs(m0 * contactVelocity(obj, contact) - m1 * contactVelocity(element, contact));
 			}
 
-			synth.play({
-				duration: 10,
-				frequency: 40 / (0.01 * Math.sqrt(systemMass)),
-				volume: momentum * 0.0005,
-				wave: "sine",
-				fadeOut: 10
-			});
+			// frequency scales with sqrt(mass)
+			// volume scales with momentum
+
+			// const frequency = 40 / (0.01 * Math.sqrt(systemMass));
+			// const volume = momentum * 0.0005;
+
+			// console.log(frequency, volume);
+
+			// if (volume > 1e-1) synth.play({
+			// 	duration: 10,
+			// 	frequency,
+			// 	volume,
+			// 	wave: "sine",
+			// 	fadeOut: 10
+			// });
 		}
 	}
 	setGrid(obj, grid, gridOffset) {
@@ -390,12 +401,12 @@ class DYNAMIC_OBJECT extends ElementScript {
 			.getModel(obj.transform)
 			.scaleAbout(Vector2.origin, 1 / CELL);
 		const bounds = gridBounds.getBoundingBox();
-		const globalMin = new Vector2(0, 0);
+		const globalMin = Vector2.origin;
 		const globalMax = new Vector2(WIDTH - 1, HEIGHT - 1);
 		const min = Vector2.clamp(Vector2.floor(bounds.min), globalMin, globalMax);
 		const max = Vector2.clamp(Vector2.ceil(bounds.max), globalMin, globalMax);
-		const c = new Vector2(0, 0);
-		const local = new Vector2(0, 0);
+		const c = Vector2.origin;
+		const local = Vector2.origin;
 		const toLocal = Matrix3.mulMatrices([
 			Matrix3.scale(1 / CELL),
 			Matrix3.translation(this.centerOfMass),
@@ -440,8 +451,8 @@ class DYNAMIC_OBJECT extends ElementScript {
 			toLocal.inverse,
 			Matrix3.scale(SKIP)
 		]);
-		const skip = new Vector2(0, 0);
-		const vertex = new Vector2(0, 0);
+		const skip = Vector2.origin;
+		const vertex = Vector2.origin;
 
 		for (c.x = min.x; c.x <= max.x; c.x++) {
 			if (c.x > topCutoff) top = topEdgeRight;
@@ -623,6 +634,8 @@ class DYNAMIC_OBJECT extends ElementScript {
 	update(obj) {
 		const { rb } = this;
 		rb.mobile = !paused || keyboard.justPressed("Enter");
+		this.lastVelocity = rb.velocity.get();
+		this.lastAngularVelocity = rb.angularVelocity;
 		for (const [key, count] of this.collidingObjects) {
 			this.collidingObjects.set(key, Math.max(0, count - 1));
 		}
@@ -1502,9 +1515,9 @@ const boidUpdate = (x, y, maxSpeed = 4, accuracy = 1, passthrough) => { // by va
 
 
 	//rules
-	let cohesionV = new Vector2(0, 0); //cohesion
-	let separationV = new Vector2(0, 0); //seperation
-	let alignmentV = new Vector2(0, 0);	//alignment
+	let cohesionV = Vector2.origin; //cohesion
+	let separationV = Vector2.origin; //seperation
+	let alignmentV = Vector2.origin;	//alignment
 	cell.vel.rotate(Random.range(-jitterRange, jitterRange));
 	cell.vel.mag += Random.range(-jitterRange, jitterRange);
 	let boundingV = new Vector2(0,0); //bounding
@@ -4070,7 +4083,6 @@ const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
 			vec3 hdr = albedo.rgb + glow.rgb;
 
 			// hdr = 1.0 / (1.0 + exp(-5.0 * (hdr - 0.5)));
-			// hdr = ACESFilm(hdr);
 
 			if (albedo != vec4(0.0)) return vec4(hdr, ceil(albedo.a) * (1.0 - transparency) + transparency);
 			else if (glow.a > 0.0) return vec4(hdr / glow.a, glow.a);
@@ -4408,7 +4420,7 @@ function handleInput() {
 								Element.die(i + x, j + y);
 							}
 						}
-						const minBounds = new Vector2(0, 0);
+						const minBounds = Vector2.origin;
 						const maxBounds = new Vector2(CHUNK_WIDTH - 1, CHUNK_HEIGHT - 1);
 						const minChunk = Vector2.clamp(Vector2.floor(bounds.min.over(CHUNK)), minBounds, maxBounds);
 						const maxChunk = Vector2.clamp(Vector2.ceil(bounds.max.over(CHUNK)), minBounds, maxBounds);

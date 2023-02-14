@@ -4143,7 +4143,7 @@ function text(font, text, x, y) {
 }
 
 const PAN_SENSITIVITY = 20;
-const ZOOM_SENSITIVITY = 0.1
+const ZOOM_SENSITIVITY = 0.1;
 let SELECTORS_SHOWN = true;
 let SETTINGS_SHOWN = false;
 
@@ -4155,9 +4155,11 @@ function brushTypeName(brushType) {
 		.find(([name, inx]) => inx === brushType)[0];
 	return name[0] + name.slice(1).toLowerCase();
 };
-let BRUSH_TYPE_COUNT = Object.keys(BRUSH_TYPES).length;
+const BRUSH_TYPE_COUNT = Object.keys(BRUSH_TYPES).length;
 let brushType = 0;
 let eraseOnly = false;
+
+// selection
 let brushSelectMin = null;
 let brushSelectMax = null;
 let brushSelection = null;
@@ -4831,6 +4833,8 @@ class BlendedEffectInstance {
 
 class SoundEffectState {
 	static MAX_INSTANCES = 4;
+	static DENSITY_INTERPOLATE = 0.1;
+	static TIME_STAGGERING = 30;
 	constructor(sound, {
 		maxFrequency = 100,
 		volume = 1
@@ -4841,25 +4845,30 @@ class SoundEffectState {
 		this.lastDensity = 0;
 		this.maxFrequency = maxFrequency;
 		this.volume = volume;
+		this.timeSinceStarted = Infinity;
 	}
 	update() {
 		const density = Number.clamp(this.frequency / this.maxFrequency, 0, 1);
-		this.lastDensity += (density - this.lastDensity) * 0.1;
+		this.lastDensity += (density - this.lastDensity) * SoundEffectState.DENSITY_INTERPOLATE;
 		const instContinuous = Number.clamp(this.lastDensity - 0.01, 0, 1) * SoundEffectState.MAX_INSTANCES;
 		const instCount = Math.ceil(instContinuous);
 		const lastInstVolume = instContinuous % 1;
 
 		while (this.instances.length > instCount)
-			this.instances.pop().stop();
+			this.instances.pop()?.stop?.();
 		this.instances.length = instCount;
 		for (let i = 0; i < instCount; i++) {
 			const volume = this.volume * ((i === instCount - 1) ? lastInstVolume : 1);
 			if (this.instances[i])
 				this.instances[i].volume = volume;
-			else
+			else if (this.timeSinceStarted > SoundEffectState.TIME_STAGGERING) {
 				this.instances[i] = new BlendedEffectInstance(this.sound, volume);
-			this.instances[i].update();
+				this.timeSinceStarted = 0;
+			}
+			this.instances[i]?.update();
 		}
+
+		this.timeSinceStarted++;
 
 		this.frequency = 0;
 	}

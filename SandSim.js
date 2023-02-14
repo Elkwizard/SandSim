@@ -1611,9 +1611,9 @@ const lavaUpdate = (x, y, type) => {
 	});
 };
 
-const liquidUpdate = (x, y, passthrough = LIQUID_PASSTHROUGH) => {
+const liquidUpdate = (x, y, sound = soundEffects.liquidSound, passthrough = LIQUID_PASSTHROUGH) => {
 	if (fluidUpdate(x, y, 1, GRAVITY, passthrough)) {
-		soundEffects.liquidSound.frequency++;
+		sound.frequency++;
 	}
 };
 
@@ -1807,7 +1807,7 @@ const DATA = {
 		["#5c0404", 15],
 		["#590404", 12]
 	]), 0.4, 0.01, (x, y) => {
-		liquidUpdate(x, y, WATER_PASSTHROUGH);
+		liquidUpdate(x, y, soundEffects.liquidUpdate, WATER_PASSTHROUGH);
 	}, (x, y) => {
 		Element.setCell(x, y, Random.bool(.05) ? TYPES.ASH : Random.bool(.05) ? TYPES.STEAM : TYPES.SMOKE);
 		if (Random.bool(.25)) Element.trySetCell(x, y - 1, TYPES.RUST);
@@ -2537,7 +2537,7 @@ const DATA = {
 
 				intervals.delay(() => {
 					eventSoundEffects.thunderSound.frequency++;
-				}, Random.range(60, 100));
+				}, ~~Random.range(60, 100));
 				return;
 			}
 		};
@@ -2617,7 +2617,7 @@ const DATA = {
 	[TYPES.LIQUID_COPPER]: new Element(20, [new Color("#a35a33"), new Color("#915129")], .65, 0, (x, y) => {
 
 		if (!Element.consumeReactMany(x, y, COLD, TYPES.COPPER))
-			liquidUpdate(x, y);
+			liquidUpdate(x, y, soundEffects.lavaSound);
 
 		lavaUpdate(x, y, TYPES.FIRE);
 	}),
@@ -2648,7 +2648,7 @@ const DATA = {
 
 	[TYPES.LIQUID_LEAD]: new Element(50, [new Color("#453e4d"), new Color("#3e3647")], 0.6, 0, (x, y) => {
 		if (!Element.consumeReactMany(x, y, COLD, TYPES.LEAD))
-			liquidUpdate(x, y);
+			liquidUpdate(x, y, soundEffects.lavaSound);
 		lavaUpdate(x, y, TYPES.FIRE);
 	}),
 
@@ -2689,7 +2689,7 @@ const DATA = {
 		else return new Color("#edc9672d");
 	}, 0.55, 0, (x, y) => {
 		if (!Element.consumeReactMany(x, y, COLD, TYPES.GOLD))
-			liquidUpdate(x, y);
+			liquidUpdate(x, y, soundEffects.lavaSound);
 		lavaUpdate(x, y, TYPES.FIRE);
 	}),
 
@@ -2719,7 +2719,7 @@ const DATA = {
 
 	[TYPES.LIQUID_IRON]: new Element(30, [new Color("#cc5546"), new Color("#dd4536")], 0.8, 0, (x, y) => {
 		if (!Element.consumeReactMany(x, y, COLD, TYPES.IRON))
-			liquidUpdate(x, y);
+			liquidUpdate(x, y, soundEffects.lavaSound);
 		lavaUpdate(x, y, TYPES.FIRE);
 	}),
 
@@ -3077,7 +3077,7 @@ const DATA = {
 		}
 	}),
 	[TYPES.WATER]: new Element(0, [new Color("#120a59"), new Color("#140960")], 0.4, 0.05, (x, y) => {
-		liquidUpdate(x, y, WATER_PASSTHROUGH);
+		liquidUpdate(x, y, soundEffects.liquidSound, WATER_PASSTHROUGH);
 	}, (x, y) => {
 		Element.setCell(x, y, TYPES.STEAM);
 		return true;
@@ -3086,7 +3086,7 @@ const DATA = {
 		["#06253d", 30],
 		["#042438", 30]
 	]), 0.42, 0.05, (x, y) => {
-		liquidUpdate(x, y, WATER_PASSTHROUGH);
+		liquidUpdate(x, y, soundEffects.liquidSound, WATER_PASSTHROUGH);
 		//if (Random.bool(.5)) {
 		const angle = Random.angle();
 		const cos = Math.cos(angle);
@@ -3100,7 +3100,7 @@ const DATA = {
 		return true;
 	}),
 	[TYPES.POWER_LAVA]: new Element(100, [Color.CYAN, Color.BLUE, Color.SKY_BLUE], 0.7, 0, (x, y) => {
-		liquidUpdate(x, y);
+		liquidUpdate(x, y, soundEffects.lavaSound);
 
 		Element.react(x, y - Math.floor((Math.random() * 6)), TYPES.AIR, TYPES.BLUE_FIRE, 0.007);
 		Element.reactMany(x, y, WATER_TYPES, TYPES.SMOKE, 0.005);
@@ -3115,12 +3115,13 @@ const DATA = {
 		lavaUpdate(x, y, TYPES.BLUE_FIRE);
 	}),
 	[TYPES.LAVA]: new Element(100, [new Color("#bf1000"), new Color("#bf2010")], 0.75, 0, (x, y) => {
-		liquidUpdate(x, y);
+		liquidUpdate(x, y, soundEffects.lavaSound);
 
 		lavaUpdate(x, y, TYPES.FIRE);
 
 		if (Random.bool(.0005)) Element.react(x, y - 1, TYPES.AIR, TYPES.FIRE);
-		Element.consumeReactMany(x, y, WATER_TYPES, TYPES.STONE);
+		if (Element.consumeReactMany(x, y, WATER_TYPES, TYPES.STONE))
+			soundEffects.solidifySound.frequency++;
 
 		if (Element.isType(x, y - 1, TYPES.LIGHTNING)) {
 			Element.setCell(x, y, TYPES.POWER_LAVA);

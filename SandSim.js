@@ -1489,6 +1489,7 @@ const fluidUpdate = (x, y, direction, accel, passthrough) => {
 		if (vel.y > 5) {
 			vel.rotate(Random.angle()).div(2);
 			createParticle(new Vector2(x, y));
+			soundEffects.rainSound.frequency++;
 			return;
 		}
 
@@ -2557,7 +2558,6 @@ const DATA = {
 		{ // rain
 			if (Random.bool(0.0004)) {
 				Element.setCell(x, y, TYPES.WATER);
-				soundEffects.rainSound.frequency++;
 				return;
 			}
 		};
@@ -2874,7 +2874,7 @@ const DATA = {
 	}),
 
 	[TYPES.ROOT]: new Element(1, [new Color("#bfb19b"), new Color("#baac99"), new Color("#d6c09f")], 0.15, .02, (x, y) => {
-		if (grid[x][y].acts != 1) {
+		if (grid[x][y].acts !== 1) {
 			let ox = x;
 
 			let p = Random.perlin(y + 1, 0.25, x);
@@ -2889,6 +2889,8 @@ const DATA = {
 
 			if (Random.bool(.08)) grid[x][y].acts = 1;
 		}
+
+		if (Element.isEmpty(x, y + 1)) Element.die(x, y);
 	}, (x, y) => {
 		Element.trySetCell(x, y - 1, Random.bool(.7) ? (Random.bool(.2) ? TYPES.ASH : TYPES.SMOKE) : TYPES.STEAM);
 	}),
@@ -4976,9 +4978,14 @@ class EventSoundEffect {
 	constructor(src, {
 		chance = 1,
 		maxPerFrame = Infinity,
-		volume = 1
+		volume = 1,
+		variations = 1
 	}) {
-		this.sound = loadResource(src + ".mp3");
+		this.sounds = [];
+		if (variations === 1)
+			this.sounds.push(loadResource(src + ".mp3"));
+		else for (let i = 0; i < variations; i++)
+			this.sounds.push(loadResource(src + i + ".mp3"));
 		this.chance = chance;
 		this.volume = volume;
 		this.frequency = 0;
@@ -4990,7 +4997,7 @@ class EventSoundEffect {
 
 		const count = Math.floor(this.toPlay);
 		for (let i = 0; i < count; i++) {
-			this.sound.play(this.volume);
+			Random.choice(this.sounds).play(this.volume);
 			this.toPlay--;
 		}
 		

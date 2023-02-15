@@ -29,7 +29,7 @@
 				volume: 0.7
 			},
 			rainSound: {
-				maxFrequency: 25,
+				maxFrequency: 10,
 				volume: 0.8
 			},
 			lavaSound: {
@@ -50,7 +50,8 @@
 			thunderSound: {
 				chance: 1,
 				maxPerFrame: 2,
-				volume: 0.8
+				volume: 0.8,
+				variations: 3
 			}
 		};
 		const SYNTH_SOUND_EFFECTS = {
@@ -100,9 +101,21 @@
 				wave: "square"
 			}
 		};
+		function createSoundEffectResources([sound, { variations = 1 }]) {
+			const prefix = "sound%20effects/";
+			if (variations === 1)
+				return [new HengineSoundResource(prefix + sound + ".mp3")];
+			const resources = [];
+			for (let i = 0; i < variations; i++)
+				resources.push(new HengineSoundResource(prefix + sound + i + ".mp3"));
+			return resources;
+		}
+		function soundEffectSuffix({ variations }, inx) {
+			return variations === 1 ? "" : inx;
+		}
         HengineLoader.load([
-			...Object.keys(EVENT_SOUND_EFFECTS).map(sound => new HengineSoundResource(`sound%20effects/${sound}.mp3`)),
-			...Object.keys(SOUND_EFFECTS).map(sound => new HengineSoundResource(`sound%20effects/${sound}.mp3`)),
+			...Object.entries(EVENT_SOUND_EFFECTS).flatMap(createSoundEffectResources),
+			...Object.entries(SOUND_EFFECTS).flatMap(createSoundEffectResources),
             
 			new HengineScriptResource("SandSim.js")
         ]);

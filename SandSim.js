@@ -1306,6 +1306,9 @@ const SOLID = new Set(Object.values(TYPES));
 SOLID.delete(TYPES.PARTICLE);
 for (const type of SOLID_PASSTHROUGH)
 	SOLID.delete(type);
+SOLID.delete(TYPES.RUST);
+SOLID.delete(TYPES.ASH);
+SOLID.delete(TYPES.GRAINY_WAX);
 const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASSTHROUGH, TYPES.PARTICLE]);
 const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER, TYPES.POND_WATER]);

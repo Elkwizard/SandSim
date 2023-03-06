@@ -3779,7 +3779,7 @@ const DATA = {
 			let newID = grid[tx][ty].id;
 			do {
 				newID = (newID + change + ELEMENT_COUNT) % ELEMENT_COUNT;
-			} while (newID !== TYPES.BAHHUM);
+			} while (newID === TYPES.BAHHUM);
 			Element.setCellId(tx, ty, newID);
 		} else Element.updateCell(x, y);
 	}),

@@ -3797,7 +3797,11 @@ const DATA = {
 		const ty = ~~Random.normalZ(y, sd);
 		if (Element.inBounds(tx, ty) && !Element.isTypes(tx, ty, RADIATION_RESISTANT) && Random.bool(0.15)) {
 			const change = Random.bool() ? -1 : 1;
-			Element.setCellId(tx, ty, (grid[tx][ty].id + change + ELEMENT_COUNT) % ELEMENT_COUNT);
+			let newID = grid[tx][ty].id;
+			do {
+				newID = (newID + change + ELEMENT_COUNT) % ELEMENT_COUNT;
+			} while (newID === TYPES.BAHHUM);
+			Element.setCellId(tx, ty, newID);
 		} else Element.updateCell(x, y);
 	}),
 

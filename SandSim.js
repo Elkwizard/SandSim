@@ -73,7 +73,7 @@ const ELEMENT_COUNT = Object.keys(TYPES).length;
 
 class WorldSave {
 	static MAGIC_SAVE_CONSTANT_ELEMENT = 0xcc910831; // indicates elements are stored absolutely
-	static MAGIC_SAVE_CONSTANT_RIGIDBODY = 0xfebc1828;
+	static MAGIC_SAVE_CONSTANT_RIGIDBODY = 0xfebc1828; // indicates rigidbodies are stored
 	constructor(grid, rigidbodies) {
 		this.grid = grid;
 		this.rigidbodies = rigidbodies;
@@ -219,9 +219,9 @@ class WorldSave {
 					.map(() => new Cell(TYPES.AIR));
 				for (let i = 0; i < obj.grid.length; i++) for (let j = 0; j < obj.grid[0].length; j++) {
 					const cell = obj.grid[i][j];
-					cell.id = buffer.read.uint8();
+					cell.id = idMap[buffer.read.uint8()];
 					if (cell.id) {
-						cell.reference = buffer.read.uint8();
+						cell.reference = idMap[buffer.read.uint8()];
 						cell.acts = buffer.read.uint32();
 					}
 				}
@@ -1502,6 +1502,27 @@ const fluidUpdate = (x, y, direction, accel, passthrough) => {
 			const dir = vel.x ? Math.sign(vel.x) : i * b;
 			vel.x += dir * disp;
 			const d = Math.sign(vel.x) * (Math.round(Math.abs(vel.x)) + 1);
+			// let cx = x;
+			// let cy = y;
+			// let rx = Math.abs(d);
+			// let ry = dy;
+			// while (rx && ry) {
+			// 	if (Element.isEmpty(cx, cy + 1, passthrough)) {
+			// 		ry--;
+			// 		cy++;
+			// 		moved = true;
+			// 		fell = true;
+			// 	} else if (Element.isEmpty(cx + dir, cy, passthrough)) {
+			// 		rx--;
+			// 		cx += dir;
+			// 		horiz = true;
+			// 		moved = true;
+			// 	} else break;
+			// }
+			// if (cx === x && cy === y) {
+			// 	vel.mul(0);
+			// 	continue;
+			// } else Element.move(x, y, cx, cy);
 			if (Element.tryMove(x, y, x + d, y + dy, passthrough)) {
 				fell = true;
 				horiz = true;

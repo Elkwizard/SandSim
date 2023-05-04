@@ -60,7 +60,8 @@ const TYPES = Object.fromEntries([
 	"GOLD", "AUREATE_DUST", "LIQUID_GOLD",
 	"IRON", "LIQUID_IRON", "RUST",
 	"MERCURY",
-	"RADIUM", "ACTINIUM", "THORIUM",
+	"RADIUM", "ACTINIUM", "THORIUM", "CURIUM",
+	"α", "β",
 	"ANTIMATTER",
 	"LIGHTNING", "LIGHT", "LIGHT_SAD",
 	"BLOOD", "MUSCLE", "BONE", "BONE_DUST", "EPIDERMIS", "INACTIVE_NEURON", "ACTIVE_NEURON", "CEREBRUM",
@@ -931,7 +932,6 @@ class Element {
 					reacted = true;
 				}
 			});
-			return reacted;
 		}
 		else {
 			Element.affectAllNeighbors(x, y, (ox, oy) => {
@@ -940,8 +940,8 @@ class Element {
 					reacted = true;
 				}
 			});
-			return reacted;
 		}
+		return reacted;
 	}
 
 	static consumeReact(x, y, reactant, product, chance = 1) {
@@ -1322,20 +1322,24 @@ const SOIL_TYPES = new Set([TYPES.DAMP_SOIL, TYPES.SOIL]);
 const GRASS_ROOTABLE = new Set([...SOIL_TYPES, ...WATER_TYPES]);
 const GRASS_GROWABLE = new Set([...GRASS_ROOTABLE, TYPES.GRASS, TYPES.ROOT]);
 const CONVEYOR_RESISTANT = new Set([TYPES.CONVEYOR_LEFT, TYPES.CONVEYOR_RIGHT, TYPES.CONDENSED_STONE]);
-const RADIATION_RESISTANT = new Set([TYPES.AIR, TYPES.RADIUM, TYPES.ACTINIUM, TYPES.THORIUM, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.CONDENSED_STONE]);
-const NEURON = new Set([TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON])
-const BRAIN = new Set([...NEURON, TYPES.CEREBRUM])
-const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD])
-const SUNFLOWER = new Set([TYPES.SUNFLOWER_PETAL, TYPES.SUNFLOWER_SEED, TYPES.SUNFLOWER_STEM])
+const RADIATION_RESISTANT = new Set([TYPES.AIR, TYPES.RADIUM, TYPES.ACTINIUM, TYPES.THORIUM, TYPES.CURIUM, TYPES.α, TYPES.β, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.CONDENSED_STONE]);
+const RADIATION_PASSTHROUGH = ALL_PASSTHROUGH;
+for (const type of RADIATION_RESISTANT)
+	RADIATION_PASSTHROUGH.delete(type);
+RADIATION_PASSTHROUGH.add(TYPES.AIR);
+const NEURON = new Set([TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON]);
+const BRAIN = new Set([...NEURON, TYPES.CEREBRUM]);
+const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD]);
+const SUNFLOWER = new Set([TYPES.SUNFLOWER_PETAL, TYPES.SUNFLOWER_SEED, TYPES.SUNFLOWER_STEM]);
 const THICKETS = new Set([TYPES.THICKET, TYPES.INCENSE, TYPES.THICKET_BUD, TYPES.THICKET_SEED, TYPES.INCENSE_SMOKE, TYPES.THICKET_STEM]);
 const ACID_IMMUNE = new Set([TYPES.ACID, TYPES.GLASS]);
-const CORAL_ON = new Set([TYPES.CORAL, TYPES.ELDER_CORAL, TYPES.COMPRESSED_CORAL])
-const CORAL_OFF = new Set([TYPES.DEAD_CORAL, TYPES.PETRIFIED_CORAL, TYPES.DEAD_COMPRESSED_CORAL])
+const CORAL_ON = new Set([TYPES.CORAL, TYPES.ELDER_CORAL, TYPES.COMPRESSED_CORAL]);
+const CORAL_OFF = new Set([TYPES.DEAD_CORAL, TYPES.PETRIFIED_CORAL, TYPES.DEAD_COMPRESSED_CORAL]);
 const INSECT = new Set([TYPES.BEE, TYPES.ANT, TYPES.DAMSELFLY, TYPES.MITE, TYPES.LIGHTNING_BUG]);
-const CREATURE = new Set([...INSECT, TYPES.MINNOW])
-const BEE_BUILDABLE = new Set([TYPES.SUNFLOWER_STEM, TYPES.HIVE])
-const MITE_EATABLE_DEFENDING = new Set([TYPES.BEE, TYPES.ANT, TYPES.HIVE])
-const MITE_EATABLE = new Set([...MITE_EATABLE_DEFENDING, ...MEATY, ...THICKETS, ...SUGARY, ...CORAL_ON, ...SUNFLOWER, TYPES.DAMSELFLY, TYPES.MINNOW, TYPES.GRASS, TYPES.FLOWER, TYPES.ROOT])
+const CREATURE = new Set([...INSECT, TYPES.MINNOW]);
+const BEE_BUILDABLE = new Set([TYPES.SUNFLOWER_STEM, TYPES.HIVE]);
+const MITE_EATABLE_DEFENDING = new Set([TYPES.BEE, TYPES.ANT, TYPES.HIVE]);
+const MITE_EATABLE = new Set([...MITE_EATABLE_DEFENDING, ...MEATY, ...THICKETS, ...SUGARY, ...CORAL_ON, ...SUNFLOWER, TYPES.DAMSELFLY, TYPES.MINNOW, TYPES.GRASS, TYPES.FLOWER, TYPES.ROOT]);
 const ANTIMATTER_PASSTHROUGH = new Set([TYPES.AIR, TYPES.ANTIMATTER]);
 
 function updatePixel(x, y) {
@@ -1474,7 +1478,7 @@ const RADIUM_COLORS = freqColoring([
 	["#c8ccc225", 3]
 ]);
 
-const fluidUpdate = (x, y, direction, accel, passthrough) => {
+const fluidUpdate = (x, y, direction, accel, passthrough, rain = false) => {
 	const cell = grid[x][y];
 	const { vel } = cell;
 	vel.y += accel;
@@ -1492,7 +1496,7 @@ const fluidUpdate = (x, y, direction, accel, passthrough) => {
 		if (vel.y > 5) {
 			vel.rotate(Random.angle()).div(2);
 			createParticle(new Vector2(x, y));
-			soundEffects.rainSound.frequency++;
+			if (rain) soundEffects.rainSound.frequency++;
 			return;
 		}
 
@@ -1674,7 +1678,7 @@ const lavaUpdate = (x, y, type) => {
 };
 
 const liquidUpdate = (x, y, sound = soundEffects.liquidSound, passthrough = LIQUID_PASSTHROUGH) => {
-	if (fluidUpdate(x, y, 1, GRAVITY, passthrough)) {
+	if (fluidUpdate(x, y, 1, GRAVITY, passthrough, sound === soundEffects.liquidSound)) {
 		sound.frequency++;
 	}
 };
@@ -1683,7 +1687,7 @@ const gasUpdate = (x, y, passthrough = GAS_PASSTHROUGH) => {
 	fluidUpdate(x, y, -1, 0, passthrough);
 };
 
-const solidUpdate = (x, y, g = GRAVITY, dxShiftChance = 0, tryMove = Element.tryMove) => {
+const solidUpdate = (x, y, g = GRAVITY, dxShiftChance = 0, tryMove = Element.tryMove, sound = soundEffects.solidSound) => {
 	const { vel } = grid[x][y];
 	vel.y += g;
 	const dx = Random.bool(dxShiftChance) ? (Random.bool(.5) ? -1 : 1) : 0;
@@ -1691,9 +1695,11 @@ const solidUpdate = (x, y, g = GRAVITY, dxShiftChance = 0, tryMove = Element.try
 	if (tryMove(x, y, x + dx, y + dy, SOLID_PASSTHROUGH));
 	else {
 		const d = Random.bool() ? -1 : 1;
-		if (tryMove(x, y, x - d, y + dy, SOLID_PASSTHROUGH));
-		else if (tryMove(x, y, x + d, y + dy, SOLID_PASSTHROUGH));
-		else{
+		if (tryMove(x, y, x - d, y + dy, SOLID_PASSTHROUGH))
+			sound.frequency++;
+		else if (tryMove(x, y, x + d, y + dy, SOLID_PASSTHROUGH))
+			sound.frequency++;
+		else {
 			if (vel.y > 4) {
 				vel.rotate(Random.angle()).div(5);
 				createParticle(new Vector2(x, y));
@@ -3302,7 +3308,7 @@ const DATA = {
 	}),
 
 	[TYPES.HONEY]: new Element(0, [new Color("#996211"), new Color("#8c590d")], 0.7, 0.05, (x, y) => {
-		fluidUpdate(x, y, 1, GRAVITY, WATER_PASSTHROUGH);
+		liquidUpdate(x, y, soundEffects.liquidSound, WATER_PASSTHROUGH);
 	}, (x, y) => {
 		Element.trySetCell(x, y - 1, TYPES.STEAM);
 		Element.setCell(x, y, TYPES.SUGAR);
@@ -3841,6 +3847,53 @@ const DATA = {
 		} else Element.updateCell(x, y);
 	}),
 
+	[TYPES.CURIUM]: new Element(1, (x, y) => {
+		const p = Random.octave(8, Random.perlin2D, x, y, 0.1);
+		const v = 1 - Random.voronoi2D(x, y, 0.2);
+		let g = p * Number.remap(v, 0, 1, 0.5, 1);
+		const STEPS = 10;
+		g = Math.round(g * STEPS) / STEPS;
+		return Color.lerp(new Color("#2e2d2a01"), new Color("#adad8840"), g ** 2);
+	}, 0.8, 0.00001, (x, y) => {
+		if (Element.react(x, y, TYPES.AIR, Random.bool() ? TYPES.α : TYPES.β, 0.001));
+		else Element.updateCell(x, y);
+	}),
+	
+
+	[TYPES.α]: new Element(30, new Color("#a3183b"), 1, 0, (x, y) => {
+		const { vel } = grid[x][y];
+
+		const nx = Math.round(x + vel.x);
+		const ny = Math.round(y + vel.y);
+		let moved = Element.tryMove(x, y, nx, ny, RADIATION_PASSTHROUGH);
+
+		if (!moved || !vel.sqrMag) {
+			synthSoundEffects.alphaParticleSound.frequency++;
+			Element.updateCell(x, y);
+			vel.x = Random.range(2, 3);
+			vel.rotate(Random.angle());
+		}
+	}),
+
+	[TYPES.β]: new Element(30, new Color("#3f18a3"), 1, 0, (x, y) => {
+		const { vel } = grid[x][y];
+
+		const nx = Math.round(x + vel.x);
+		const ny = Math.round(y + vel.y);
+		let moved = Element.tryMove(x, y, nx, ny, RADIATION_PASSTHROUGH);
+
+		if (!moved) {
+			Element.consumeReactMany(x, y, MEATY, TYPES.FIRE);
+		}
+
+		if (!moved || !vel.sqrMag) {
+			synthSoundEffects.betaParticleSound.frequency++;
+			Element.updateCell(x, y);
+			vel.x = Random.range(20, 30);
+			vel.rotate(Random.angle());
+		}
+	}),
+
 	[TYPES.ANTIMATTER]: new Element(1, (x, y) => {
 		return Color.lerp(new Color("#36313030"), new Color("#a8878030"), Random.voronoi2D(x, y, 0.05));
 	}, 0, 0, (x, y) => {
@@ -3944,10 +3997,16 @@ function typeName(type) {
 	return Object.entries(TYPES)
 		.find(([k, v]) => v === type)[0]
 		.split("_")
-		.map(word => word
-			.toLowerCase()
-			.capitalize()
-		).join(" ");
+		.map(word => {
+			let result = "";
+			for (const char of word) {
+				if (char.match(/[a-zA-Z]/g)) {
+					if (result.length) result += char.toLowerCase();
+					else result += char.toUpperCase();
+				} else result += char;
+			}
+			return result;
+		}).join(" ");
 }
 
 class TYPE_SELECTOR extends ElementScript {

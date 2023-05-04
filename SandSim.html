@@ -39,6 +39,10 @@
 			solidifySound: {
 				maxFrequency: 10,
 				volume: 0.9
+			},
+			solidSound: {
+				maxFrequency: 2000,
+				volume: 1
 			}
 		};
 		const EVENT_SOUND_EFFECTS = {
@@ -99,6 +103,24 @@
 				frequency: () => Random.range(500, 700),
 				volume: 0.5,
 				wave: "square"
+			},
+			alphaParticleSound: {
+				chance: 0.01,
+				maxPerFrame: 5,
+				frequency: () => 200,
+				volume: 0.1,
+				duration: 150,
+				fadeOut: 40,
+				wave: "sine"
+			},
+			betaParticleSound: {
+				chance: 0.01,
+				maxPerFrame: 10,
+				frequency: 50,
+				volume: 0.1,
+				duration: 150,
+				fadeOut: 40,
+				wave: "sine"
 			}
 		};
 		function createSoundEffectResources([sound, { variations = 1 }]) {

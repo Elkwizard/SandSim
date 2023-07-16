@@ -53,7 +53,7 @@ const TYPES = Object.fromEntries([
 	"WAX", "GRAINY_WAX", "MOLTEN_WAX",
 	"LAVA", "POWER_LAVA",
 	"STEAM", "SMOKE", "HYDROGEN",
-	"GLASS", "ACID",
+	"CRACK", "GLASS", "ACID",
 	"BATTERY", "ELECTRICITY", "CONVEYOR_LEFT", "CONVEYOR_RIGHT", "STEEL",
 	"COPPER", "LIQUID_COPPER",
 	"LEAD", "LIQUID_LEAD",
@@ -334,6 +334,20 @@ class DYNAMIC_OBJECT extends ElementScript {
 				const contact = contacts[i];
 				momentum += Math.abs(m0 * contactVelocity(obj, contact) - m1 * contactVelocity(element, contact));
 			}
+
+			if (momentum > 300000) {
+				const x = Math.round(contacts[0].x / CELL);
+				const y = Math.round(contacts[0].y / CELL);
+				makeCircle(x, y, TYPES.CRACK, 6, 1, ALL_PASSTHROUGH);
+			}
+
+			synth.play({
+				duration: 10,
+				frequency: 440,
+				volume: momentum * 0.000005,
+				wave: "sine",
+				fadeOut: 10
+			});
 
 			// frequency scales with sqrt(mass)
 			// volume scales with momentum
@@ -1309,6 +1323,7 @@ for (const type of SOLID_PASSTHROUGH)
 SOLID.delete(TYPES.RUST);
 SOLID.delete(TYPES.ASH);
 SOLID.delete(TYPES.GRAINY_WAX);
+SOLID.delete(TYPES.CRACK);
 const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASSTHROUGH, TYPES.PARTICLE]);
 const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER, TYPES.POND_WATER]);
@@ -1760,7 +1775,7 @@ const EXPLOSION_PASSTHROUGH = new Set([...LIQUID_PASSTHROUGH, TYPES.LIGHTNING, T
 EXPLOSION_PASSTHROUGH.delete(TYPES.BLUE_FIRE);
 EXPLOSION_PASSTHROUGH.delete(TYPES.FIRE);
 
-function explodeLine(x, y, x1, y1, vel, passthrough) {
+function explodeLine(x, y, x1, y1, vel, passthrough, fireType) {
 	const dx = x1 - x;
 	const dy = y1 - y;
 	const len = Math.sqrt(dx * dx + dy * dy);
@@ -1776,6 +1791,14 @@ function explodeLine(x, y, x1, y1, vel, passthrough) {
 			if (Random.bool(DATA[grid[ox][oy].id].getResistance(ox, oy)))
 				break;
 
+			if (Random.bool(0.2)) {
+				Element.die(ox, oy);
+				continue;
+			}
+
+			if (Random.bool(0.8))
+				Element.setCell(ox, oy, fireType);
+
 			const CHAOS = 10 * (vel);
 			createParticle(new Vector2(ox, oy), new Vector2(
 				dx * t * vel + Random.range(-CHAOS, CHAOS),
@@ -1785,10 +1808,10 @@ function explodeLine(x, y, x1, y1, vel, passthrough) {
 	}
 }
 
-function explode(ox, oy, r = 10, vel = 0.2, passthrough = EXPLOSION_PASSTHROUGH, sound = true) {
+function explode(ox, oy, r = 10, vel = 0.2, passthrough = EXPLOSION_PASSTHROUGH, sound = true, fireType = TYPES.FIRE) {
 	const c = Math.PI * 2 * r;
 
-	if(sound) eventSoundEffects.explosionSound.frequency++;
+	if (sound) eventSoundEffects.explosionSound.frequency++;
 
 	const dyn = scene.main.getElementsWithScript(DYNAMIC_OBJECT);
 	for (let i = 0; i < dyn.length; i++)
@@ -1798,7 +1821,7 @@ function explode(ox, oy, r = 10, vel = 0.2, passthrough = EXPLOSION_PASSTHROUGH,
 		const angle = i / c * Math.PI * 2;
 		const x1 = Math.cos(angle) * r + ox;
 		const y1 = Math.sin(angle) * r + oy;
-		explodeLine(ox, oy, x1, y1, vel, passthrough);
+		explodeLine(ox, oy, x1, y1, vel, passthrough, fireType);
 	}
 }
 
@@ -2323,7 +2346,7 @@ const DATA = {
 					else
 						makeCircle(x, y, TYPES.SMOKE, Random.int(15, 35));
 				}
-				if (Random.bool(.2)) explode(x, y, Random.int(20, 45));
+				if (Random.bool(.2)) explode(x, y, Random.int(20, 45), undefined, undefined, undefined, TYPES.BLUE_FIRE);
 			}
 		});
 	}, (x, y) => {
@@ -2370,6 +2393,43 @@ const DATA = {
 		return Color.avg([layer(x, y), layer(x * 5, y * 5), layer(x * 10, y * 10)]);
 		// freqColoring([
 	}, 1),
+
+	[TYPES.CRACK]: new Element(1, (x, y) => {
+		if (!grid[x][y].reference) return new Color(0, 0, 0, 0);
+		const color = DATA[grid[x][y].reference].getColor(x, y);
+		return Color.lerp(color, new Color(255, 255, 255, Color.EPSILON), 0.7);
+	}, 0, 0, (x, y) => {
+		const cell = grid[x][y];
+		const LIFETIME = 10;
+		if (!cell.acts) {
+			cell.acts = LIFETIME + 1;
+			cell.vel = Vector2.fromAngle(Random.angle());
+		}
+
+		if (cell.acts > LIFETIME) {
+			cell.acts--;
+			const nx = Math.round(x + cell.vel.x);
+			const ny = Math.round(y + cell.vel.y);
+			
+			if (!Element.isEmpty(nx, ny) && Element.inBounds(nx, ny)) {
+				Element.setCell(nx, ny, TYPES.CRACK);
+				const CHAOS = 0.1;
+				grid[nx][ny].vel = Vector2.fromAngle(
+					cell.vel.angle + Random.range(-CHAOS, CHAOS)
+				);
+				grid[nx][ny].acts = LIFETIME + 1;
+			}
+		}
+
+		if (cell.acts > 1)
+			cell.acts--;
+		else {
+			makeCircle(x, y, TYPES.AIR, 2, 1, ALL_PASSTHROUGH);
+		}
+
+		Element.updateCell(x, y);
+
+	}, () => null, true),
 
 	[TYPES.GLASS]: new Element(.1, [new Color("#7e8d94"), new Color("#838f91")], 0.2),
 

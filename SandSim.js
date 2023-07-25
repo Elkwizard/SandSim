@@ -60,7 +60,7 @@ const TYPES = Object.fromEntries([
 	"GOLD", "AUREATE_DUST", "LIQUID_GOLD",
 	"IRON", "LIQUID_IRON", "RUST",
 	"MERCURY",
-	"RADIUM", "ACTINIUM", "THORIUM", "CURIUM",
+	"RADIUM", "ACTINIUM", "THORIUM", "CURIUM", "FLEROVIUM",
 	"α", "β",
 	"ANTIMATTER",
 	"LIGHTNING", "LIGHT", "LIGHT_SAD",
@@ -1337,7 +1337,7 @@ const SOIL_TYPES = new Set([TYPES.DAMP_SOIL, TYPES.SOIL]);
 const GRASS_ROOTABLE = new Set([...SOIL_TYPES, ...WATER_TYPES]);
 const GRASS_GROWABLE = new Set([...GRASS_ROOTABLE, TYPES.GRASS, TYPES.ROOT]);
 const CONVEYOR_RESISTANT = new Set([TYPES.CONVEYOR_LEFT, TYPES.CONVEYOR_RIGHT, TYPES.CONDENSED_STONE]);
-const RADIATION_RESISTANT = new Set([TYPES.AIR, TYPES.RADIUM, TYPES.ACTINIUM, TYPES.THORIUM, TYPES.CURIUM, TYPES.α, TYPES.β, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.CONDENSED_STONE]);
+const RADIATION_RESISTANT = new Set([TYPES.AIR, TYPES.RADIUM, TYPES.ACTINIUM, TYPES.THORIUM, TYPES.CURIUM, TYPES.FLEROVIUM, TYPES.α, TYPES.β, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.CONDENSED_STONE]);
 const RADIATION_PASSTHROUGH = ALL_PASSTHROUGH;
 for (const type of RADIATION_RESISTANT)
 	RADIATION_PASSTHROUGH.delete(type);
@@ -3258,7 +3258,10 @@ const DATA = {
 			else Element.setCell(x, y - 1, TYPES.STEAM);
 		}
 	}),
-	[TYPES.WATER]: new Element(0, [new Color("#120a59"), new Color("#140960")], 0.4, 0.05, (x, y) => {
+	[TYPES.WATER]: new Element(0, (x, y) => {
+		return Random.choice([new Color("#120a5900"), new Color("#14096000")]);
+		//return Color.lerp(Random.choice([new Color("#120a5900"), new Color("#14096000")]), Color.WHITE, Math.min(Math.sqrt(grid[x][y].vel.mag) * 0.1, 1));
+	}, 0.4, 0.05, (x, y) => {
 		liquidUpdate(x, y, soundEffects.liquidSound, WATER_PASSTHROUGH);
 	}, (x, y) => {
 		Element.setCell(x, y, TYPES.STEAM);
@@ -3919,18 +3922,60 @@ const DATA = {
 		else Element.updateCell(x, y);
 	}),
 	
+	[TYPES.FLEROVIUM]: new Element(1, (x, y) => {
+		const angle = Math.PI * .55;
+		const c = Math.cos(angle);
+		const s = Math.sin(angle);
 
-	[TYPES.α]: new Element(30, new Color("#a3183b"), 1, 0, (x, y) => {
+		const x1 = x;
+		const y1 = y;
+		[x, y] = [x * c - y * s, x * s + y * c];
+		x *= 4;
+		y *= 4;
+		y /= 6;
+		y += Random.perlin(x, 5) * 3;
+		
+		let p = Random.perlin2D(x, y, 0.1);
+		if (p > .8) return new Color("#40153320");
+		p = Random.perlin2D(x - 4, y - 2, 0.1);
+		if (p > .85) return new Color("#63184d30");
+
+		else return new Color(Random.perlin2D(x1, y1, 0.6) > 0.5 ? Random.bool(0.5) ? "#3c324001" : "#34303601" :  Random.bool(0.5) ? "#473e4a01" : "#52465701");
+	}, 0.6, 0, (x, y) => {
+		const sd = 7;
+		const tx = ~~Random.normalZ(x, sd);
+		const ty = ~~Random.normalZ(y, sd);
+		if (Element.inBounds(tx, ty)) {
+			grid[tx][ty].vel.mul(1.5);
+		} else Element.updateCell(x, y);
+	}),
+
+	[TYPES.α]: new Element(30, (x, y) => {
+		const color = new Color("#a3183b");
+		color.a = grid[x][y].vel.mag / 100;
+		return color;
+	}, 1, 0, (x, y) => {
 		const { vel } = grid[x][y];
+
+		const c = 200;
+		if (vel.mag > c) Element.affectAllNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.α) && grid[ox][oy].vel.mag > c) {
+				Element.setCell(x, y, TYPES.β);
+				Element.setCell(ox, oy, TYPES.β);
+				explode(x, y+1, 30);
+			}
+		})
 
 		const nx = Math.round(x + vel.x);
 		const ny = Math.round(y + vel.y);
 		let moved = Element.tryMove(x, y, nx, ny, RADIATION_PASSTHROUGH);
 
-		if (!moved || !vel.sqrMag) {
+		const { sqrMag } = vel;
+		if (!moved || !sqrMag) {
 			synthSoundEffects.alphaParticleSound.frequency++;
 			Element.updateCell(x, y);
-			vel.x = Random.range(2, 3);
+			vel.x = sqrMag ? Math.sqrt(sqrMag) : Random.range(2, 3);
+			vel.y = 0;
 			vel.rotate(Random.angle());
 		}
 	}),
@@ -3950,6 +3995,7 @@ const DATA = {
 			synthSoundEffects.betaParticleSound.frequency++;
 			Element.updateCell(x, y);
 			vel.x = Random.range(20, 30);
+			vel.y = 0;
 			vel.rotate(Random.angle());
 		}
 	}),

@@ -1665,7 +1665,7 @@ const fireUpdate = (x, y, type, up = true) => {
 			if (Element.tryMove(x, y, x + d, y - 1));
 			else if (Element.tryMove(x, y, x - d, y - 1));
 		}
-		if (!burned) Element.die(x, y);
+		Element.die(x, y);
 	}
 
 	Element.updateCell(x, y);

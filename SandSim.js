@@ -53,14 +53,14 @@ const TYPES = Object.fromEntries([
 	"WAX", "GRAINY_WAX", "MOLTEN_WAX",
 	"LAVA", "POWER_LAVA",
 	"STEAM", "SMOKE", "HYDROGEN",
-	"GLASS", "ACID",
+	"CRACK", "GLASS", "ACID",
 	"BATTERY", "ELECTRICITY", "CONVEYOR_LEFT", "CONVEYOR_RIGHT", "STEEL",
 	"COPPER", "LIQUID_COPPER",
 	"LEAD", "LIQUID_LEAD",
 	"GOLD", "AUREATE_DUST", "LIQUID_GOLD",
 	"IRON", "LIQUID_IRON", "RUST",
 	"MERCURY",
-	"RADIUM", "ACTINIUM", "THORIUM", "CURIUM",
+	"RADIUM", "ACTINIUM", "THORIUM", "CURIUM", "FLEROVIUM",
 	"α", "β",
 	"ANTIMATTER",
 	"LIGHTNING", "LIGHT", "LIGHT_SAD",
@@ -334,6 +334,20 @@ class DYNAMIC_OBJECT extends ElementScript {
 				const contact = contacts[i];
 				momentum += Math.abs(m0 * contactVelocity(obj, contact) - m1 * contactVelocity(element, contact));
 			}
+
+			if (momentum > 300000) {
+				const x = Math.round(contacts[0].x / CELL);
+				const y = Math.round(contacts[0].y / CELL);
+				makeCircle(x, y, TYPES.CRACK, 6, 1, ALL_PASSTHROUGH);
+			}
+
+			synth.play({
+				duration: 10,
+				frequency: 440,
+				volume: momentum * 0.000005,
+				wave: "sine",
+				fadeOut: 10
+			});
 
 			// frequency scales with sqrt(mass)
 			// volume scales with momentum
@@ -1309,6 +1323,7 @@ for (const type of SOLID_PASSTHROUGH)
 SOLID.delete(TYPES.RUST);
 SOLID.delete(TYPES.ASH);
 SOLID.delete(TYPES.GRAINY_WAX);
+SOLID.delete(TYPES.CRACK);
 const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASSTHROUGH, TYPES.PARTICLE]);
 const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER, TYPES.POND_WATER]);
@@ -1322,7 +1337,7 @@ const SOIL_TYPES = new Set([TYPES.DAMP_SOIL, TYPES.SOIL]);
 const GRASS_ROOTABLE = new Set([...SOIL_TYPES, ...WATER_TYPES]);
 const GRASS_GROWABLE = new Set([...GRASS_ROOTABLE, TYPES.GRASS, TYPES.ROOT]);
 const CONVEYOR_RESISTANT = new Set([TYPES.CONVEYOR_LEFT, TYPES.CONVEYOR_RIGHT, TYPES.CONDENSED_STONE]);
-const RADIATION_RESISTANT = new Set([TYPES.AIR, TYPES.RADIUM, TYPES.ACTINIUM, TYPES.THORIUM, TYPES.CURIUM, TYPES.α, TYPES.β, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.CONDENSED_STONE]);
+const RADIATION_RESISTANT = new Set([TYPES.AIR, TYPES.RADIUM, TYPES.ACTINIUM, TYPES.THORIUM, TYPES.CURIUM, TYPES.FLEROVIUM, TYPES.α, TYPES.β, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.CONDENSED_STONE]);
 const RADIATION_PASSTHROUGH = ALL_PASSTHROUGH;
 for (const type of RADIATION_RESISTANT)
 	RADIATION_PASSTHROUGH.delete(type);
@@ -1760,7 +1775,7 @@ const EXPLOSION_PASSTHROUGH = new Set([...LIQUID_PASSTHROUGH, TYPES.LIGHTNING, T
 EXPLOSION_PASSTHROUGH.delete(TYPES.BLUE_FIRE);
 EXPLOSION_PASSTHROUGH.delete(TYPES.FIRE);
 
-function explodeLine(x, y, x1, y1, vel, passthrough) {
+function explodeLine(x, y, x1, y1, vel, passthrough, fireType) {
 	const dx = x1 - x;
 	const dy = y1 - y;
 	const len = Math.sqrt(dx * dx + dy * dy);
@@ -1776,6 +1791,14 @@ function explodeLine(x, y, x1, y1, vel, passthrough) {
 			if (Random.bool(DATA[grid[ox][oy].id].getResistance(ox, oy)))
 				break;
 
+			if (Random.bool(0.2)) {
+				Element.die(ox, oy);
+				continue;
+			}
+
+			if (Random.bool(0.8))
+				Element.setCell(ox, oy, fireType);
+
 			const CHAOS = 10 * (vel);
 			createParticle(new Vector2(ox, oy), new Vector2(
 				dx * t * vel + Random.range(-CHAOS, CHAOS),
@@ -1785,10 +1808,10 @@ function explodeLine(x, y, x1, y1, vel, passthrough) {
 	}
 }
 
-function explode(ox, oy, r = 10, vel = 0.2, passthrough = EXPLOSION_PASSTHROUGH, sound = true) {
+function explode(ox, oy, r = 10, vel = 0.2, passthrough = EXPLOSION_PASSTHROUGH, sound = true, fireType = TYPES.FIRE) {
 	const c = Math.PI * 2 * r;
 
-	if(sound) eventSoundEffects.explosionSound.frequency++;
+	if (sound) eventSoundEffects.explosionSound.frequency++;
 
 	const dyn = scene.main.getElementsWithScript(DYNAMIC_OBJECT);
 	for (let i = 0; i < dyn.length; i++)
@@ -1798,7 +1821,7 @@ function explode(ox, oy, r = 10, vel = 0.2, passthrough = EXPLOSION_PASSTHROUGH,
 		const angle = i / c * Math.PI * 2;
 		const x1 = Math.cos(angle) * r + ox;
 		const y1 = Math.sin(angle) * r + oy;
-		explodeLine(ox, oy, x1, y1, vel, passthrough);
+		explodeLine(ox, oy, x1, y1, vel, passthrough, fireType);
 	}
 }
 
@@ -2323,7 +2346,7 @@ const DATA = {
 					else
 						makeCircle(x, y, TYPES.SMOKE, Random.int(15, 35));
 				}
-				if (Random.bool(.2)) explode(x, y, Random.int(20, 45));
+				if (Random.bool(.2)) explode(x, y, Random.int(20, 45), undefined, undefined, undefined, TYPES.BLUE_FIRE);
 			}
 		});
 	}, (x, y) => {
@@ -2370,6 +2393,43 @@ const DATA = {
 		return Color.avg([layer(x, y), layer(x * 5, y * 5), layer(x * 10, y * 10)]);
 		// freqColoring([
 	}, 1),
+
+	[TYPES.CRACK]: new Element(1, (x, y) => {
+		if (!grid[x][y].reference) return new Color(0, 0, 0, 0);
+		const color = DATA[grid[x][y].reference].getColor(x, y);
+		return Color.lerp(color, new Color(255, 255, 255, Color.EPSILON), 0.7);
+	}, 0, 0, (x, y) => {
+		const cell = grid[x][y];
+		const LIFETIME = 10;
+		if (!cell.acts) {
+			cell.acts = LIFETIME + 1;
+			cell.vel = Vector2.fromAngle(Random.angle());
+		}
+
+		if (cell.acts > LIFETIME) {
+			cell.acts--;
+			const nx = Math.round(x + cell.vel.x);
+			const ny = Math.round(y + cell.vel.y);
+			
+			if (!Element.isEmpty(nx, ny) && Element.inBounds(nx, ny)) {
+				Element.setCell(nx, ny, TYPES.CRACK);
+				const CHAOS = 0.1;
+				grid[nx][ny].vel = Vector2.fromAngle(
+					cell.vel.angle + Random.range(-CHAOS, CHAOS)
+				);
+				grid[nx][ny].acts = LIFETIME + 1;
+			}
+		}
+
+		if (cell.acts > 1)
+			cell.acts--;
+		else {
+			makeCircle(x, y, TYPES.AIR, 2, 1, ALL_PASSTHROUGH);
+		}
+
+		Element.updateCell(x, y);
+
+	}, () => null, true),
 
 	[TYPES.GLASS]: new Element(.1, [new Color("#7e8d94"), new Color("#838f91")], 0.2),
 
@@ -3198,7 +3258,10 @@ const DATA = {
 			else Element.setCell(x, y - 1, TYPES.STEAM);
 		}
 	}),
-	[TYPES.WATER]: new Element(0, [new Color("#120a59"), new Color("#140960")], 0.4, 0.05, (x, y) => {
+	[TYPES.WATER]: new Element(0, (x, y) => {
+		return Random.choice([new Color("#120a5900"), new Color("#14096000")]);
+		//return Color.lerp(Random.choice([new Color("#120a5900"), new Color("#14096000")]), Color.WHITE, Math.min(Math.sqrt(grid[x][y].vel.mag) * 0.1, 1));
+	}, 0.4, 0.05, (x, y) => {
 		liquidUpdate(x, y, soundEffects.liquidSound, WATER_PASSTHROUGH);
 	}, (x, y) => {
 		Element.setCell(x, y, TYPES.STEAM);
@@ -3859,18 +3922,60 @@ const DATA = {
 		else Element.updateCell(x, y);
 	}),
 	
+	[TYPES.FLEROVIUM]: new Element(1, (x, y) => {
+		const angle = Math.PI * .55;
+		const c = Math.cos(angle);
+		const s = Math.sin(angle);
 
-	[TYPES.α]: new Element(30, new Color("#a3183b"), 1, 0, (x, y) => {
+		const x1 = x;
+		const y1 = y;
+		[x, y] = [x * c - y * s, x * s + y * c];
+		x *= 4;
+		y *= 4;
+		y /= 6;
+		y += Random.perlin(x, 5) * 3;
+		
+		let p = Random.perlin2D(x, y, 0.1);
+		if (p > .8) return new Color("#40153320");
+		p = Random.perlin2D(x - 4, y - 2, 0.1);
+		if (p > .85) return new Color("#63184d30");
+
+		else return new Color(Random.perlin2D(x1, y1, 0.6) > 0.5 ? Random.bool(0.5) ? "#3c324001" : "#34303601" :  Random.bool(0.5) ? "#473e4a01" : "#52465701");
+	}, 0.6, 0, (x, y) => {
+		const sd = 7;
+		const tx = ~~Random.normalZ(x, sd);
+		const ty = ~~Random.normalZ(y, sd);
+		if (Element.inBounds(tx, ty)) {
+			grid[tx][ty].vel.mul(1.5);
+		} else Element.updateCell(x, y);
+	}),
+
+	[TYPES.α]: new Element(30, (x, y) => {
+		const color = new Color("#a3183b");
+		color.a = grid[x][y].vel.mag / 100;
+		return color;
+	}, 1, 0, (x, y) => {
 		const { vel } = grid[x][y];
+
+		const c = 200;
+		if (vel.mag > c) Element.affectAllNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.α) && grid[ox][oy].vel.mag > c) {
+				Element.setCell(x, y, TYPES.β);
+				Element.setCell(ox, oy, TYPES.β);
+				explode(x, y+1, 30);
+			}
+		})
 
 		const nx = Math.round(x + vel.x);
 		const ny = Math.round(y + vel.y);
 		let moved = Element.tryMove(x, y, nx, ny, RADIATION_PASSTHROUGH);
 
-		if (!moved || !vel.sqrMag) {
+		const { sqrMag } = vel;
+		if (!moved || !sqrMag) {
 			synthSoundEffects.alphaParticleSound.frequency++;
 			Element.updateCell(x, y);
-			vel.x = Random.range(2, 3);
+			vel.x = sqrMag ? Math.sqrt(sqrMag) : Random.range(2, 3);
+			vel.y = 0;
 			vel.rotate(Random.angle());
 		}
 	}),
@@ -3890,6 +3995,7 @@ const DATA = {
 			synthSoundEffects.betaParticleSound.frequency++;
 			Element.updateCell(x, y);
 			vel.x = Random.range(20, 30);
+			vel.y = 0;
 			vel.rotate(Random.angle());
 		}
 	}),

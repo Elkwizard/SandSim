@@ -335,11 +335,11 @@ class DYNAMIC_OBJECT extends ElementScript {
 				momentum += Math.abs(m0 * contactVelocity(obj, contact) - m1 * contactVelocity(element, contact));
 			}
 
-			if (momentum > 300000) {
-				const x = Math.round(contacts[0].x / CELL);
-				const y = Math.round(contacts[0].y / CELL);
-				makeCircle(x, y, TYPES.CRACK, 6, 1, ALL_PASSTHROUGH);
-			}
+			// if (momentum > 300000) {
+			// 	const x = Math.round(contacts[0].x / CELL);
+			// 	const y = Math.round(contacts[0].y / CELL);
+			// 	makeCircle(x, y, TYPES.CRACK, 6, 1, ALL_PASSTHROUGH);
+			// }
 
 			synth.play({
 				duration: 10,

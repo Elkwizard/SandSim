@@ -3234,7 +3234,7 @@ const DATA = {
 	}, (x, y) => {
 		Element.trySetCell(x, y - 1, Random.bool(.6) ? (Random.bool(.2) ? TYPES.ASH : TYPES.SMOKE) : TYPES.STEAM);
 	}),
-	[TYPES.FLOWER]: new Element(5, [Color.RAZZMATAZZ, Color.RAZZMATAZZ, Color.RAZZMATAZZ, Color.RED, Color.SKY_BLUE, Color.CYAN, Color.LAVENDER, Color.MAGENTA, Color.PINK, Color.YELLOW, Color.WHITE, Color.ORANGE], 0.05, .07, (x, y) => {
+	[TYPES.FLOWER]: new Element(5, [Color.PERIWINKLE, Color.PERIWINKLE, Color.PERIWINKLE, Color.RED, Color.SKY_BLUE, Color.CYAN, Color.LAVENDER, Color.MAGENTA, Color.PINK, Color.YELLOW, Color.WHITE, Color.ORANGE], 0.05, .07, (x, y) => {
 		let arr = Element.getNeighborsOfType(x, y, TYPES.GRASS)
 		if (arr[0] || arr[2] || arr[6]) Element.setCell(x, y, TYPES.GRASS);
 

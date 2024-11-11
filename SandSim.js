@@ -432,7 +432,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 			Matrix3.scale(CELL)
 		]);
 		
-		const localDY = new Vector2(toLocal.m01, toLocal.m11);
+		const localDY = new Vector2(toLocal[3], toLocal[4]);
 
 		// border precomputing
 		const edges = gridBounds
@@ -506,10 +506,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 		return false;
 	}
 	inject(obj) {
-		if ((obj.defaultShape && !obj.getBoundingBox().intersect(new Rect(0, 0, width, height))) || isNaN(obj.transform.position)) {
-			obj.remove();
-			return;
-		}
+		if (this.removeIfNecessary()) return;
 		
 		this.forEachCell((cell, x, y) => {
 			const c = grid[x][y];

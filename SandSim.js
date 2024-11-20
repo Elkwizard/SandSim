@@ -417,7 +417,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 
 		const gridBounds = this.gridBounds
 			.getModel(obj.transform)
-			.scaleAbout(Vector2.origin, 1 / CELL);
+			.scale(1 / CELL, Vector2.origin);
 		const bounds = gridBounds.getBoundingBox();
 		const globalMin = Vector2.origin;
 		const globalMax = new Vector2(WIDTH - 1, HEIGHT - 1);
@@ -605,7 +605,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 
 			const newShape = Geometry.inflate(
 				shapes[0]
-					.scaleAbout(Vector2.origin, CELL * DYNAMIC_OBJECT.RES)
+					.scale(CELL * DYNAMIC_OBJECT.RES, Vector2.origin)
 					.move(this.centerOfMass.inverse),
 				inflateDist
 			);
@@ -625,8 +625,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 		} else for (let i = 0; i < shapes.length; i++) {
 			let shape = shapes[i];
 			const subgrid = extractSubGrid(shape);
-			shape = shape
-				.scaleAbout(Vector2.origin, CELL * DYNAMIC_OBJECT.RES);
+			shape = shape.scale(CELL * DYNAMIC_OBJECT.RES, Vector2.origin);
 			
 			const gridOffset = shape.getBoundingBox().min;
 			shape = Geometry.inflate(shape, inflateDist);

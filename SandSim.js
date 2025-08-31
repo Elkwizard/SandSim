@@ -416,7 +416,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 		const { SKIP } = DYNAMIC_OBJECT;
 
 		const gridBounds = this.gridBounds
-			.getModel(obj.transform)
+			.getModel(obj.transform.matrix)
 			.scale(1 / CELL, Vector2.origin);
 		const bounds = gridBounds.getBoundingBox();
 		const globalMin = Vector2.origin;
@@ -428,7 +428,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 		const toLocal = Matrix3.mulMatrices([
 			Matrix3.scale(1 / CELL),
 			Matrix3.translation(this.centerOfMass),
-			obj.transform.inverse,
+			obj.transform.invMatrix,
 			Matrix3.scale(CELL)
 		]);
 		
@@ -630,7 +630,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 			const gridOffset = shape.getBoundingBox().min;
 			shape = Geometry.inflate(shape, inflateDist);
 
-			if (i === shapes.length - 1) { // guarentee other things have been placed before moving
+			if (i === shapes.length - 1) { // guarantee other things have been placed before moving
 				this.setGrid(subgrid, gridOffset);
 				obj.defaultShape = shape.move(this.centerOfMass.plus(gridOffset).inverse);
 			} else {
@@ -659,6 +659,8 @@ class DYNAMIC_OBJECT extends ElementScript {
 			renderer.stroke(Color.RED).infer(shape);
 			renderer.draw(Color.RED).circle(0, 0, CELL);
 			renderer.stroke(new Color(255, 255, 0, 0.5), CELL).rect(this.gridBounds);
+			for (const collider of obj.getConvexShapes(name))
+				renderer.stroke(Color.BLUE).infer(collider);
 		}
 		// renderer.drawThrough(obj.transform, () => {
 		// 	renderer.image(this.tex).rect(this.gridBounds);
@@ -1301,7 +1303,7 @@ class Element {
 const GRAVITY = 0.5 / CELL;
 const DISPERSION = 4;
 
-scene.physicsEngine.gravity.y = GRAVITY * CELL;
+scene.physics.gravity.y = GRAVITY * CELL;
 
 const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT, TYPES.INCENSE_SMOKE]);
 const OTHER_GAS = new Set([TYPES.AIR, ...GAS]);
@@ -4118,7 +4120,8 @@ class TYPE_SELECTOR extends ElementScript {
 		obj.scripts.removeDefault();
 		this.type = type;
 		this.name = typeName(type);
-		this.tex = new Texture(Math.ceil(obj.width / CELL), Math.ceil(obj.height / CELL));
+		const box = obj.getBoundingBox();
+		this.tex = new Texture(Math.ceil(box.width / CELL), Math.ceil(box.height / CELL));
 		const element = DATA[type];
 		this.tex.shader((x, y, dest) => {
 			dest.set(element.getColor(x, y));
@@ -4132,21 +4135,21 @@ class TYPE_SELECTOR extends ElementScript {
 		obj.hidden = !SELECTORS_SHOWN;
 	}
 	draw(obj, name, shape) {
-		renderer.clip().infer(shape);
-		renderer.image(this.tex).infer(shape);
-		renderer.unclip();
-		renderer.textMode = TextMode.CENTER_CENTER;
+		ui.clip().infer(shape);
+		ui.image(this.tex).infer(shape);
+		ui.unclip();
+		ui.textMode = TextMode.CENTER_CENTER;
 		const words = this.name.split(" ");
 
 		const symbol = words.length === 1 ? words[0].slice(0, 2) : words.slice(0, 2).map(word => word[0]).join("");
 		// text(TYPE_SELECTOR.FONT, symbol[0].toUpperCase() + symbol.slice(1).toLowerCase(), 0, 0);
 		const selected = brush === this.type;
 		obj.layer = obj.hovered;
-		renderer.stroke(selected ? Color.YELLOW : Color.WHITE, selected ? 3 : 1).infer(shape);
+		ui.stroke(selected ? Color.YELLOW : Color.WHITE, selected ? 3 : 1).infer(shape);
 		if (obj.hovered || selected) {
-			renderer.draw(new Color(255, 255, 255, 0.3)).infer(shape);
+			ui.draw(new Color(255, 255, 255, 0.3)).infer(shape);
 			if (obj.hovered) {
-				renderer.textMode = TextMode.TOP_CENTER;
+				ui.textMode = TextMode.TOP_CENTER;
 				text(Font.Arial20, this.name, 0, obj.height / 2 + 10);
 			}
 		}
@@ -4172,7 +4175,7 @@ class SETTINGS extends ElementScript {
 		obj.scripts.removeDefault();
 		this.type = type;
 		this.totalControls = Object.entries(controls).length;
-		this.rowHeight = obj.height / this.totalControls;
+		this.rowHeight = obj.getBoundingBox().height / this.totalControls;
 		this.font = new Font(this.rowHeight * 0.7, "Arial");
 	}
 	click(obj) {
@@ -4181,18 +4184,18 @@ class SETTINGS extends ElementScript {
 		obj.hidden = !SETTINGS_SHOWN;
 	}
 	draw(obj, name, shape) {
-		renderer.draw(Color.WHITE).rect(shape);
+		ui.draw(Color.WHITE).rect(shape);
 		const borderColor = Color.GRAY;
 		const entries = Object.entries(controls);
 		for (let i = 0; i < this.totalControls; i++) {
 			const y = shape.y + i * this.rowHeight;
-			renderer.stroke(borderColor).rect(-shape.width / 2, y, shape.width, this.rowHeight);
-			renderer.textMode = TextMode.CENTER_CENTER;
-			renderer.draw(Color.BLACK).text(this.font, entries[i][0], -shape.width / 4, y + this.rowHeight / 2);
-			renderer.textMode = TextMode.CENTER_CENTER;
-			renderer.draw(Color.BLACK).text(this.font, entries[i][1], shape.width / 4, y + this.rowHeight / 2);
+			ui.stroke(borderColor).rect(-shape.width / 2, y, shape.width, this.rowHeight);
+			ui.textMode = TextMode.CENTER_CENTER;
+			ui.draw(Color.BLACK).text(this.font, entries[i][0], -shape.width / 4, y + this.rowHeight / 2);
+			ui.textMode = TextMode.CENTER_CENTER;
+			ui.draw(Color.BLACK).text(this.font, entries[i][1], shape.width / 4, y + this.rowHeight / 2);
 		}
-		renderer.stroke(borderColor).line(0, -shape.height / 2, 0, shape.height / 2);
+		ui.stroke(borderColor).line(0, -shape.height / 2, 0, shape.height / 2);
 
 	}
 	static create() {
@@ -4520,8 +4523,8 @@ function nextBrush() {
 
 function text(font, text, x, y) {
 	const f = font.fontSize * 0.1;
-	renderer.stroke(Color.WHITE, 4).text(font, text, x, y);
-	renderer.draw(Color.BLACK).text(font, text, x, y);
+	ui.stroke(Color.WHITE, 4).text(font, text, x, y);
+	ui.draw(Color.BLACK).text(font, text, x, y);
 }
 
 const PAN_SENSITIVITY = 20;
@@ -5109,7 +5112,7 @@ function displayDebugInfo() {
 		debugFrame.renderer.clear();
 
 		if (keyboard.pressed("Shift")) {
-			renderer.textMode = TextMode.TOP_LEFT;
+			ui.textMode = TextMode.TOP_LEFT;
 			for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
 				text(Font.Arial10, Math.round(densityMap[i][j] * 100) / 100, i * CHUNK * CELL + 10, j * CHUNK * CELL + 10);
 			}
@@ -5324,9 +5327,9 @@ intervals.continuous(time => {
 				}
 			};
 			
-			renderer.textMode = TextMode.TOP_LEFT;
+			ui.textMode = TextMode.TOP_LEFT;
 			text(Font.Arial20, `brush: ${typeName(brush)}, brushSize: ${brushSize}, brushType: ${brushTypeName(brushType)} | ${brushType}, paused: ${paused}, RTX: ${RTX}, fps: ${intervals.fps}`, 10, 10);
-			renderer.textMode = TextMode.TOP_RIGHT;
+			ui.textMode = TextMode.TOP_RIGHT;
 			text(Font.Arial15, hoveredElementType ? typeName(hoveredElementType) + (hoveredElementActs ? " (" + hoveredElementActs + ")" : "") : "", width - 10, 10);
 		}
 	// } catch (err) {

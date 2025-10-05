@@ -4,8 +4,8 @@ title = "Sandulation";
 document.getElementsByTagName("link")[0].href = "./favicon.ico";
 
 const controls = {
-	"Touch/Click": "Draw with current brush",
-	"Up/Down Arrows": "Change brush size",
+	"Touch/Click": "Draw with current brush or switch element",
+	"Up/Down Arrows & Mouse Wheel": "Change brush size",
 	"</> & Left/Right Arrows": "Change brush type",
 	"p": "Toggle erase only",
 	"Space": "Pause/Play",
@@ -17,8 +17,8 @@ const controls = {
 	"Shift + u": "Upload world from file",
 	"r": "Reset world",
 	"e": "Restore zoom",
-	"Shift + = & Mouse Wheel Up": "Zoom in",
-	"Shift + - & Mouse Wheel Down": "Zoom out",
+	"Shift + =": "Zoom in",
+	"Shift + -": "Zoom out",
 	"Shift + Arrow Keys & Control + Drag": "Move camera",
 	"Control + Click & Drag": "Move camera",
 	"g": "Toggle 'RTX'",
@@ -4141,8 +4141,6 @@ class TYPE_SELECTOR extends ElementScript {
 		ui.textMode = TextMode.CENTER_CENTER;
 		const words = this.name.split(" ");
 
-		const symbol = words.length === 1 ? words[0].slice(0, 2) : words.slice(0, 2).map(word => word[0]).join("");
-		// text(TYPE_SELECTOR.FONT, symbol[0].toUpperCase() + symbol.slice(1).toLowerCase(), 0, 0);
 		const selected = brush === this.type;
 		obj.layer = obj.hovered;
 		ui.stroke(selected ? Color.YELLOW : Color.WHITE, selected ? 3 : 1).infer(shape);
@@ -4150,7 +4148,7 @@ class TYPE_SELECTOR extends ElementScript {
 			ui.draw(new Color(255, 255, 255, 0.3)).infer(shape);
 			if (obj.hovered) {
 				ui.textMode = TextMode.TOP_CENTER;
-				text(Font.Arial20, this.name, 0, obj.height / 2 + 10);
+				text(Font.Arial20, this.name, 0, obj.getBoundingBox().height / 2 + 10);
 			}
 		}
 	}
@@ -4530,7 +4528,7 @@ function text(font, text, x, y) {
 const PAN_SENSITIVITY = 20;
 const ZOOM_SENSITIVITY = 0.1;
 let SELECTORS_SHOWN = true;
-let SETTINGS_SHOWN = false;
+let SETTINGS_SHOWN = true;
 
 const BRUSH_TYPES = Object.fromEntries([
 	"CIRCLE", "SQUARE", "RING", "FORCEFUL", "ROW", "COLUMN", "SELECT", "DUPLICATE"

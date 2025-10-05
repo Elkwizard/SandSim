@@ -4,6 +4,7 @@ title = "Sandulation";
 document.getElementsByTagName("link")[0].href = "./favicon.ico";
 
 const controls = {
+	"Escape": "Toggle this menu",
 	"Touch/Click": "Draw with current brush or switch element",
 	"Up/Down Arrows & Mouse Wheel": "Change brush size",
 	"</> & Left/Right Arrows": "Change brush type",

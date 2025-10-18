@@ -73,6 +73,8 @@ const TYPES = Object.fromEntries([
 
 const ELEMENT_COUNT = Object.keys(TYPES).length;
 
+const evaluateLine = (line, x) => line.slope * x + line.intercept;
+
 class WorldSave {
 	static MAGIC_SAVE_CONSTANT_ELEMENT = 0xcc910831; // indicates elements are stored absolutely
 	static MAGIC_SAVE_CONSTANT_RIGIDBODY = 0xfebc1828; // indicates rigidbodies are stored
@@ -476,8 +478,8 @@ class DYNAMIC_OBJECT extends ElementScript {
 		for (c.x = min.x; c.x <= max.x; c.x++) {
 			if (c.x > topCutoff) top = topEdgeRight;
 			if (c.x > bottomCutoff) bottom = bottomEdgeRight;
-			const minY = Math.max(Math.floor(top.evaluate(c.x)), min.y);
-			const maxY = Math.min(Math.ceil(bottom.evaluate(c.x)) - 1, max.y);
+			const minY = Math.max(Math.floor(evaluateLine(top, c.x)), min.y);
+			const maxY = Math.min(Math.ceil(evaluateLine(bottom, c.x)) - 1, max.y);
 			c.y = minY;
 			toLocal.times(c, local);
 			for (; c.y <= maxY; c.y++) {
@@ -561,7 +563,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 			for (let i = minX; i <= maxX; i++) {
 				const stops = edges
 					.filter(edge => edge.a.x > edge.b.x ? edge.b.x <= i && i < edge.a.x : edge.a.x <= i && i < edge.b.x)
-					.map(edge => edge.a.y === edge.b.y ? edge.a.y : edge.evaluate(i))
+					.map(edge => edge.a.y === edge.b.y ? edge.a.y : evaluateLine(edge, i))
 					.sort((a, b) => a - b);
 	
 				for (let n = 0; n < stops.length; n += 2) {
